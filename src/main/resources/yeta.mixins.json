@@ -4,13 +4,18 @@
   "package": "dev.ketsuneban.yeta.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "BedBlockMixin",
+    "ArmorStandMixin",
+    "BedRespawnMixin",
     "BoatMixin",
     "DoorBlockMixin",
     "FaceAttachedBlockMixin",
     "FallingSnowLandingMixin",
     "FallingSnowMixin",
-    "PistonBaseBlockMixin"
+    "PistonBaseBlockMixin",
+    "WalkNodeEvaluatorMixin",
+    "IronGolemMixin",
+    "MapItemSavedDataMixin",
+    "SpawnerBlockMixin"
   ],
   "client": [
     "BeaconRendererMixin",

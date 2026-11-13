@@ -13,6 +13,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
+import net.neoforged.neoforge.event.level.BlockEvent;
 
 @EventBusSubscriber(modid = Yeta.MOD_ID)
 public final class SnowFeatures {
@@ -25,16 +26,33 @@ public final class SnowFeatures {
     public static void placeOnPlant(PlayerInteractEvent.RightClickBlock event) {
         if (!event.getItemStack().is(Items.SNOW)) return;
         var state = event.getLevel().getBlockState(event.getPos());
-        boolean plant = state.is(BlockTags.FLOWERS) || state.is(Blocks.SHORT_GRASS)
-            || state.is(Blocks.FERN) || state.is(Blocks.DEAD_BUSH)
-            || state.is(Blocks.BROWN_MUSHROOM) || state.is(Blocks.RED_MUSHROOM)
-            || state.is(Blocks.PINK_PETALS);
-        if (!plant) return;
+        if (!isSoftPlant(state)) return;
         event.setCancellationResult(InteractionResult.SUCCESS);
         event.setCanceled(true);
         if (event.getLevel().isClientSide()) return;
-        event.getLevel().setBlock(event.getPos(), Blocks.SNOW.defaultBlockState(), 3);
+        ServerLevel level = (ServerLevel)event.getLevel();
+        SnowStorage.of(level).cover(event.getPos(), state);
+        level.setBlock(event.getPos(), Blocks.SNOW.defaultBlockState(), 3);
         if (!event.getEntity().getAbilities().instabuild) event.getItemStack().shrink(1);
+    }
+
+    public static boolean isSoftPlant(net.minecraft.world.level.block.state.BlockState state) {
+        return state.is(BlockTags.FLOWERS) || state.is(Blocks.SHORT_GRASS)
+            || state.is(Blocks.FERN) || state.is(Blocks.DEAD_BUSH)
+            || state.is(Blocks.BROWN_MUSHROOM) || state.is(Blocks.RED_MUSHROOM)
+            || state.is(Blocks.PINK_PETALS);
+    }
+
+    @SubscribeEvent
+    public static void restoreCoveredPlant(BlockEvent.BreakEvent event) {
+        if (!(event.getLevel() instanceof ServerLevel level) || !event.getState().is(Blocks.SNOW)) return;
+        var plant = SnowStorage.of(level).take(event.getPos());
+        if (plant == null) return;
+        int layers = event.getState().getValue(SnowLayerBlock.LAYERS);
+        event.setCanceled(true);
+        level.setBlock(event.getPos(), plant, 3);
+        net.minecraft.world.level.block.Block.popResource(level, event.getPos(),
+            new net.minecraft.world.item.ItemStack(Items.SNOWBALL, Math.max(1, layers)));
     }
 
     @SubscribeEvent
@@ -64,20 +82,12 @@ public final class SnowFeatures {
                     } else {
                         var overlay = level.getBlockState(sky);
 
-                        boolean soft = overlay.isAir() || overlay.is(Blocks.SHORT_GRASS)
-                            || overlay.is(Blocks.FERN) || overlay.is(Blocks.DEAD_BUSH)
-                            || overlay.is(Blocks.DANDELION) || overlay.is(Blocks.POPPY)
-                            || overlay.is(Blocks.BLUE_ORCHID) || overlay.is(Blocks.ALLIUM)
-                            || overlay.is(Blocks.AZURE_BLUET) || overlay.is(Blocks.OXEYE_DAISY)
-                            || overlay.is(Blocks.CORNFLOWER) || overlay.is(Blocks.LILY_OF_THE_VALLEY)
-                            || overlay.is(Blocks.RED_TULIP) || overlay.is(Blocks.ORANGE_TULIP)
-                            || overlay.is(Blocks.WHITE_TULIP) || overlay.is(Blocks.PINK_TULIP)
-                            || overlay.is(Blocks.PINK_PETALS) || overlay.is(Blocks.BROWN_MUSHROOM)
-                            || overlay.is(Blocks.RED_MUSHROOM);
+                        boolean soft = overlay.isAir() || isSoftPlant(overlay);
                         var layer = Blocks.SNOW.defaultBlockState();
                         if (soft && (overlay.isAir() ? layer.canSurvive(level, sky) :
                                 level.getBlockState(sky.below()).isFaceSturdy(level, sky.below(),
                                     net.minecraft.core.Direction.UP))) {
+                            if (!overlay.isAir()) SnowStorage.of(level).cover(sky, overlay);
                             level.setBlock(sky, layer, 3);
                         }
                     }

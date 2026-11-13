@@ -2,6 +2,49 @@
 
 Every project change is recorded here, including release preparation.
 
+## 0.3.0 — November 14, 2026
+
+### Additions
+
+- Added juvenile dolphins, squids, glow squids, salmon, cod and tropical fish with growth over time.
+- Shulkers can now be dyed directly with dyes.
+- Elder Guardians now have a boss bar, beam pull, melee attack and continuously renewed Mining Fatigue until defeated.
+- Ocean Monument treasure is redistributed as 80% gold, 10% emerald and 10% diamond blocks.
+- Arrows, tridents and fishing bobbers bounce off the world border.
+- Iron Golems can board minecarts.
+- Added the regular spawner sound set from newer Minecraft versions.
+
+### Changes
+
+- Withers reliably spawn from the soul-sand and skull structure and create a stronger death blast that does not destroy the Nether Star.
+- Powered Withers deal more damage and break nearby eligible blocks more aggressively.
+- Skeleton variants lead moving targets for harder-to-dodge shots.
+- Impaling now damages any wet target, including targets standing in water cauldrons.
+- Potion, bottle, tipped-arrow, dye, dyeable-item, bucket and witch-hut cauldron interactions were reconciled as one system.
+- Snow accumulates during snowfall, remembers covered plants and restores them when the snow is removed.
+- Any leaves beneath any snow layer turn fully white without forcing a complete chunk refresh every second.
+- Off-map player markers rotate toward the mapped area.
+- Rails, carpets and snow layers are treated as walkable flat blocks by mob pathfinding.
+- Iron Golems hold poppies near baby villagers for about 40 seconds with a 60–80 second cooldown.
+- Updated spawn eggs, banner patterns, redstone torches, repeaters, comparators, pistons and the Blaze rod visual resources.
+- Baby animals use refreshed proportions; aquatic mobs now have a dedicated juvenile lifecycle.
+
+### Fixes
+
+- Restored correct bed geometry and collision; beds remain valid respawn points with an End Portal block above either half.
+- Fixed armor-stand offhand insertion, removal and pose cycling.
+- Pistons move containers, furnaces, smokers and blast furnaces without duplicating items while preserving contents and cooking progress.
+- Chat heads preserve transparent skin pixels.
+- Sheared `jeb_` sheep keep their animated body tint while always dropping white wool.
+- Fixed falling snow landing on and preserving soft plants.
+- Removed excessive once-per-second full chunk refreshes from foliage weathering.
+
+### Website
+
+- Converted the site to a five-section single-page interface that never changes the address bar.
+- Added live release/download lists, version notes, GitHub tree browsing and direct file/archive downloads.
+- Refreshed the home copy, compatibility chips, contacts, links, Icons8 credit and the new Yeta logo.
+
 ## 0.2.0 — November 13, 2026
 
 - Extended beacon beam visibility to 1024 blocks.

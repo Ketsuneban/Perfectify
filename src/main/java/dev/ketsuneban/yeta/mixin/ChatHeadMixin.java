@@ -23,7 +23,6 @@ public abstract class ChatHeadMixin {
                                     FormattedCharSequence content, int x, int y, int color) {
         PlayerInfo sender = findSender(content);
         if (sender == null) return graphics.drawString(font, content, x, y, color);
-        graphics.fill(x, y - 1, x + 10, y + 9, 0xAA101A2A);
         graphics.blit(sender.getSkin().texture(), x + 1, y, 8, 8, 8, 8, 64, 64);
         graphics.blit(sender.getSkin().texture(), x + 1, y, 40, 8, 8, 8, 64, 64);
         return graphics.drawString(font, content, x + 11, y, color);

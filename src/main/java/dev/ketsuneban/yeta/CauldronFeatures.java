@@ -23,6 +23,7 @@ import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
@@ -89,8 +90,9 @@ public final class CauldronFeatures {
         YetaNetwork.send(level, pos, -1);
     }
 
-    @SubscribeEvent
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void onUse(PlayerInteractEvent.RightClickBlock e) {
+        if (e.getHand() != net.minecraft.world.InteractionHand.MAIN_HAND) return;
         var level = e.getLevel();
         BlockPos pos = e.getPos();
         BlockState state = level.getBlockState(pos);

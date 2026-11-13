@@ -1,6 +1,7 @@
 package dev.ketsuneban.yeta.mixin;
 
 import dev.ketsuneban.yeta.SnowFeatures;
+import dev.ketsuneban.yeta.SnowStorage;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.minecraft.world.level.block.Blocks;
@@ -24,6 +25,10 @@ public abstract class FallingSnowLandingMixin {
         if (self.level().isClientSide || !blockState.is(Blocks.SNOW) || !self.onGround()) return;
         BlockPos pos = self.blockPosition();
         BlockState existing = self.level().getBlockState(pos);
+        if (SnowFeatures.isSoftPlant(existing) && self.level() instanceof net.minecraft.server.level.ServerLevel level) {
+            SnowStorage.of(level).cover(pos, existing);
+            return;
+        }
         if (!existing.is(Blocks.SNOW)) return;
         int merged = Math.min(SnowFeatures.MAX_SNOW_LAYERS,
             existing.getValue(SnowLayerBlock.LAYERS) + blockState.getValue(SnowLayerBlock.LAYERS));

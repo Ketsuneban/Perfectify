@@ -15,6 +15,7 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 @EventBusSubscriber(modid = Yeta.MOD_ID)
 public final class SmartMobsAndGolems {
+    private static final String FLOWER_COOLDOWN = "yetaFlowerCooldownUntil";
     private static int ticks;
 
     private SmartMobsAndGolems() {}
@@ -77,10 +78,13 @@ public final class SmartMobsAndGolems {
                     for (IronGolem golem : level.getEntitiesOfClass(
                             IronGolem.class, player.getBoundingBox().inflate(20))) {
                         if (golem.getTarget() != null || golem.getOfferFlowerTick() > 0) continue;
+                        if (golem.getPersistentData().getLong(FLOWER_COOLDOWN) > level.getGameTime()) continue;
                         List<Villager> children = level.getEntitiesOfClass(Villager.class,
                             golem.getBoundingBox().inflate(6), Villager::isBaby);
                         if (!children.isEmpty()) {
                             golem.offerFlower(true);
+                            golem.getPersistentData().putLong(FLOWER_COOLDOWN,
+                                level.getGameTime() + 1200 + level.random.nextInt(401));
                         }
                     }
                 }

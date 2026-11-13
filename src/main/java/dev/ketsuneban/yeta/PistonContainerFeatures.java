@@ -36,10 +36,15 @@ public final class PistonContainerFeatures {
         Map<Long, Pending> pending = PENDING.computeIfAbsent(level.dimension(), key -> new HashMap<>());
         for (BlockPos source : resolver.getToPush()) {
             BlockEntity entity = level.getBlockEntity(source);
-            if (!(entity instanceof Container)) continue;
+            if (!(entity instanceof Container container)) continue;
             BlockPos destination = source.relative(movement);
             pending.put(destination.asLong(), new Pending(
                 entity.saveWithFullMetadata(level.registryAccess()), level.getGameTime() + 40));
+            // Vanilla drops a block entity inventory while the piston replaces it.
+            // The complete NBT was captured above, so clearing the live container prevents
+            // both dropped duplicates and interrupted furnace progress before restoration.
+            container.clearContent();
+            entity.setChanged();
         }
     }
 

@@ -3,15 +3,10 @@ package dev.ketsuneban.yeta;
 import java.util.Map;
 import java.util.WeakHashMap;
 import net.minecraft.core.Rotations;
-import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResult;
-import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.decoration.ArmorStand;
-import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
-import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.tick.EntityTickEvent;
 
 @EventBusSubscriber(modid = Yeta.MOD_ID)
@@ -145,31 +140,9 @@ public final class ArmorStandFeatures {
         setPose(stand, Math.min(12, Math.max(0, power - 1)));
     }
 
-    @SubscribeEvent
-    public static void onInteract(PlayerInteractEvent.EntityInteract event) {
-        if (!(event.getTarget() instanceof ArmorStand stand)) return;
-        if (event.getHand() != InteractionHand.MAIN_HAND || !event.getEntity().isShiftKeyDown()) return;
-
-        if (!event.getLevel().isClientSide()) {
-            ItemStack held = event.getEntity().getMainHandItem().copy();
-            if (held.isEmpty()) {
-                ItemStack stored = stand.getItemBySlot(EquipmentSlot.OFFHAND).copy();
-                if (!stored.isEmpty()) {
-                    stand.setItemSlot(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
-                    event.getEntity().setItemInHand(InteractionHand.MAIN_HAND, stored);
-                } else {
-                    int next = (stand.getPersistentData().getInt(POSE_KEY) + 1) % POSES.length;
-                    setPose(stand, next);
-                }
-            } else {
-                ItemStack stored = stand.getItemBySlot(EquipmentSlot.OFFHAND).copy();
-                stand.setShowArms(true);
-                stand.setItemSlot(EquipmentSlot.OFFHAND, held);
-                event.getEntity().setItemInHand(InteractionHand.MAIN_HAND, stored);
-            }
-        }
-        event.setCancellationResult(InteractionResult.SUCCESS);
-        event.setCanceled(true);
+    public static void cyclePose(ArmorStand stand) {
+        int next = (stand.getPersistentData().getInt(POSE_KEY) + 1) % POSES.length;
+        setPose(stand, next);
     }
 
     private static void setPose(ArmorStand stand, int poseIndex) {

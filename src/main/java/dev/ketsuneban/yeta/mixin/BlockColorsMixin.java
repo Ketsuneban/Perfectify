@@ -30,6 +30,9 @@ public abstract class BlockColorsMixin {
         int base = callback.getReturnValue();
         if (base < 0) return;
         float amount = YetaClient.snowWhiteness();
+        if (pos != null && level != null && level.getBlockState(pos.above()).is(Blocks.SNOW)) {
+            amount = 1.0F;
+        }
         int r = (base >> 16) & 255;
         int g = (base >> 8) & 255;
         int b = base & 255;

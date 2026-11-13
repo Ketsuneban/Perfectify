@@ -80,9 +80,10 @@ public final class YetaClient {
         float target = snowing ? 1.0F : 0.0F;
         float previous = snowWhiteness;
         snowWhiteness += Math.copySign(Math.min(Math.abs(target - snowWhiteness), 0.0025F), target - snowWhiteness);
-        if (Math.abs(previous - snowWhiteness) > 0.0001F && ++foliageRefreshTicks >= 20) {
+        if (Math.abs(previous - snowWhiteness) > 0.0001F && ++foliageRefreshTicks >= 100) {
             foliageRefreshTicks = 0;
-            minecraft.levelRenderer.allChanged();
+            minecraft.levelRenderer.setBlocksDirty(pos.getX() - 32, pos.getY() - 24, pos.getZ() - 32,
+                pos.getX() + 32, pos.getY() + 24, pos.getZ() + 32);
         }
     }
 

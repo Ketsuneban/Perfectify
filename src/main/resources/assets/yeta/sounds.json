@@ -1,0 +1,50 @@
+{
+  "spawner_break": {
+    "subtitle": "subtitles.block.generic.break",
+    "sounds": [
+      "minecraft:block/spawner/break1",
+      "minecraft:block/spawner/break2",
+      "minecraft:block/spawner/break3",
+      "minecraft:block/spawner/break4"
+    ]
+  },
+  "spawner_step": {
+    "subtitle": "subtitles.block.generic.footsteps",
+    "sounds": [
+      "minecraft:block/spawner/step1",
+      "minecraft:block/spawner/step2",
+      "minecraft:block/spawner/step3",
+      "minecraft:block/spawner/step4",
+      "minecraft:block/spawner/step5"
+    ]
+  },
+  "spawner_place": {
+    "subtitle": "subtitles.block.generic.place",
+    "sounds": [
+      "minecraft:block/spawner/break1",
+      "minecraft:block/spawner/break2",
+      "minecraft:block/spawner/break3",
+      "minecraft:block/spawner/break4"
+    ]
+  },
+  "spawner_hit": {
+    "subtitle": "subtitles.block.generic.hit",
+    "sounds": [
+      "minecraft:block/spawner/step1",
+      "minecraft:block/spawner/step2",
+      "minecraft:block/spawner/step3",
+      "minecraft:block/spawner/step4",
+      "minecraft:block/spawner/step5"
+    ]
+  },
+  "spawner_fall": {
+    "subtitle": "subtitles.block.generic.fall",
+    "sounds": [
+      "minecraft:block/spawner/step1",
+      "minecraft:block/spawner/step2",
+      "minecraft:block/spawner/step3",
+      "minecraft:block/spawner/step4",
+      "minecraft:block/spawner/step5"
+    ]
+  }
+}
