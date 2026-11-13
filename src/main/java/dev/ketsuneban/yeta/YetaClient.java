@@ -2,11 +2,13 @@ package dev.ketsuneban.yeta;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.network.chat.Component;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.InputEvent;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
 import org.lwjgl.glfw.GLFW;
 
 @EventBusSubscriber(modid = Yeta.MOD_ID, value = Dist.CLIENT)
@@ -20,6 +22,9 @@ public final class YetaClient {
 
     private static int progress = 0;
     private static long lastPressNanos = 0L;
+    private static float snowWhiteness;
+    private static int foliageRefreshTicks;
+    private static ClientLevel lastLevel;
 
     private YetaClient() { }
 
@@ -54,6 +59,35 @@ public final class YetaClient {
             progress = (key == SECRET_CODE[0]) ? 1 : 0;
             lastPressNanos = progress == 1 ? now : 0L;
         }
+    }
+
+    @SubscribeEvent
+    public static void onClientTick(ClientTickEvent.Post event) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.level != lastLevel) {
+            lastLevel = minecraft.level;
+            ClientCauldronColors.clear();
+        }
+        if (minecraft.level == null || minecraft.player == null) {
+            snowWhiteness = 0.0F;
+            return;
+        }
+        var pos = minecraft.player.blockPosition();
+        boolean snowing = minecraft.level.isRaining()
+            && minecraft.level.canSeeSky(pos.above())
+            && minecraft.level.getBiome(pos).value().getPrecipitationAt(pos)
+                == net.minecraft.world.level.biome.Biome.Precipitation.SNOW;
+        float target = snowing ? 1.0F : 0.0F;
+        float previous = snowWhiteness;
+        snowWhiteness += Math.copySign(Math.min(Math.abs(target - snowWhiteness), 0.0025F), target - snowWhiteness);
+        if (Math.abs(previous - snowWhiteness) > 0.0001F && ++foliageRefreshTicks >= 20) {
+            foliageRefreshTicks = 0;
+            minecraft.levelRenderer.allChanged();
+        }
+    }
+
+    public static float snowWhiteness() {
+        return snowWhiteness;
     }
 
     private static void showSecretTitle(Minecraft minecraft) {

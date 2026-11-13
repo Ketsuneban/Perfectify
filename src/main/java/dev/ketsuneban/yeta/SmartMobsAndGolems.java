@@ -76,7 +76,7 @@ public final class SmartMobsAndGolems {
                 for (var player : level.players()) {
                     for (IronGolem golem : level.getEntitiesOfClass(
                             IronGolem.class, player.getBoundingBox().inflate(20))) {
-                        if (golem.getTarget() != null || level.random.nextInt(6) != 0) continue;
+                        if (golem.getTarget() != null || golem.getOfferFlowerTick() > 0) continue;
                         List<Villager> children = level.getEntitiesOfClass(Villager.class,
                             golem.getBoundingBox().inflate(6), Villager::isBaby);
                         if (!children.isEmpty()) {

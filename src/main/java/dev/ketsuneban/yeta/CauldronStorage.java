@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.Collections;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -39,6 +40,9 @@ public final class CauldronStorage extends SavedData {
     }
     public void remove(BlockPos pos) {
         if (contents.remove(pos.asLong()) != null) setDirty();
+    }
+    public Map<Long, Contents> entries() {
+        return Collections.unmodifiableMap(contents);
     }
     public boolean hutSeen(BlockPos pos) { return initializedHuts.contains(pos.asLong()); }
     public void markHut(BlockPos pos) {

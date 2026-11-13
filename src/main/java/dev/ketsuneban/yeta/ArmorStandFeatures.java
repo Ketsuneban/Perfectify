@@ -153,8 +153,14 @@ public final class ArmorStandFeatures {
         if (!event.getLevel().isClientSide()) {
             ItemStack held = event.getEntity().getMainHandItem().copy();
             if (held.isEmpty()) {
-                int next = (stand.getPersistentData().getInt(POSE_KEY) + 1) % POSES.length;
-                setPose(stand, next);
+                ItemStack stored = stand.getItemBySlot(EquipmentSlot.OFFHAND).copy();
+                if (!stored.isEmpty()) {
+                    stand.setItemSlot(EquipmentSlot.OFFHAND, ItemStack.EMPTY);
+                    event.getEntity().setItemInHand(InteractionHand.MAIN_HAND, stored);
+                } else {
+                    int next = (stand.getPersistentData().getInt(POSE_KEY) + 1) % POSES.length;
+                    setPose(stand, next);
+                }
             } else {
                 ItemStack stored = stand.getItemBySlot(EquipmentSlot.OFFHAND).copy();
                 stand.setShowArms(true);

@@ -44,13 +44,18 @@ public final class CauldronFeatures {
         if (value == null || (value.isPotion() && value.units() <= 0)) {
             data.remove(pos);
             level.setBlock(pos, Blocks.CAULDRON.defaultBlockState(), 3);
+            YetaNetwork.send(level, pos, -1);
         } else {
             data.put(pos, value);
             if (value.isPotion()) {
                 level.setBlock(pos, Blocks.WATER_CAULDRON.defaultBlockState()
                     .setValue(LayeredCauldronBlock.LEVEL, height(value.units())), 3);
             }
+            YetaNetwork.send(level, pos, colorOf(value));
         }
+    }
+    public static int colorOf(CauldronStorage.Contents contents) {
+        return contents.isPotion() ? potionData(contents).getColor() : contents.color();
     }
     private static Holder<Potion> potion(String id) {
         return BuiltInRegistries.POTION.getHolder(ResourceLocation.parse(id))
@@ -78,6 +83,10 @@ public final class CauldronFeatures {
     private static void interactDone(PlayerInteractEvent.RightClickBlock e) {
         e.setCancellationResult(InteractionResult.SUCCESS);
         e.setCanceled(true);
+    }
+    private static void clearStored(ServerLevel level, BlockPos pos) {
+        CauldronStorage.of(level).remove(pos);
+        YetaNetwork.send(level, pos, -1);
     }
 
     @SubscribeEvent
@@ -139,7 +148,7 @@ public final class CauldronFeatures {
         if (stored != null && stored.mode().equals("dye") &&
                 (held.is(Items.WATER_BUCKET) || held.is(Items.LAVA_BUCKET) ||
                  (held.is(Items.BUCKET) && state.getValue(LayeredCauldronBlock.LEVEL) == 3))) {
-            if (level instanceof ServerLevel sl) CauldronStorage.of(sl).remove(pos);
+            if (level instanceof ServerLevel sl) clearStored(sl, pos);
             return;
         }
 
@@ -198,6 +207,7 @@ public final class CauldronFeatures {
                     | ((((prior & 255) + (color & 255)) / 2));
             }
             CauldronStorage.of(sl).put(pos, CauldronStorage.Contents.colored(color));
+            YetaNetwork.send(sl, pos, color);
             take(e.getEntity(), held, 1);
             return;
         }
@@ -221,7 +231,7 @@ public final class CauldronFeatures {
         if (stored != null && stored.isPotion() &&
                 (held.is(Items.WATER_BUCKET) || held.is(Items.LAVA_BUCKET))) {
             if (level instanceof ServerLevel sl) {
-                CauldronStorage.of(sl).remove(pos);
+                clearStored(sl, pos);
             }
             return;
         }
@@ -243,6 +253,7 @@ public final class CauldronFeatures {
     public static void onBreak(BlockEvent.BreakEvent event) {
         if (event.getLevel() instanceof ServerLevel level && isCauldron(event.getState())) {
             CauldronStorage.of(level).remove(event.getPos());
+            YetaNetwork.send(level, event.getPos(), -1);
         }
     }
 
@@ -271,8 +282,8 @@ public final class CauldronFeatures {
 
     private static void initializeNearbyHut(ServerLevel level, BlockPos center,
                                             CauldronStorage data) {
-        for (int dx = -7; dx <= 7; dx++) for (int dz = -7; dz <= 7; dz++)
-            for (int dy = -3; dy <= 3; dy++) {
+        for (int dx = -12; dx <= 12; dx++) for (int dz = -12; dz <= 12; dz++)
+            for (int dy = -6; dy <= 6; dy++) {
                 BlockPos pos = center.offset(dx, dy, dz);
                 if (!level.hasChunkAt(pos) ||
                     !level.getBlockState(pos).is(Blocks.CAULDRON) || data.hutSeen(pos))
@@ -289,8 +300,6 @@ public final class CauldronFeatures {
                     }
                 }
                 if (!crafting || !mushroom) continue;
-                data.markHut(pos);
-
                 int roll = level.random.nextInt(100);
                 Holder<Potion> selected = roll < 25 ? Potions.HEALING
                     : roll < 50 ? Potions.POISON : roll < 65 ? Potions.SWIFTNESS
@@ -299,6 +308,7 @@ public final class CauldronFeatures {
                 int units = (1 + level.random.nextInt(3)) * 2;
                 update(level, pos, CauldronStorage.Contents.potion(
                     BuiltInRegistries.POTION.getKey(selected.value()).toString(), "normal", units));
+                data.markHut(pos);
             }
     }
 }

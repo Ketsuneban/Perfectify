@@ -6,16 +6,36 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SnowLayerBlock;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.item.Items;
+import net.minecraft.tags.BlockTags;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 
 @EventBusSubscriber(modid = Yeta.MOD_ID)
 public final class SnowFeatures {
-    public static final int MAX_SNOW_LAYERS = 5;
+    public static final int MAX_SNOW_LAYERS = 8;
     private static int ticks;
 
     private SnowFeatures() {}
+
+    @SubscribeEvent
+    public static void placeOnPlant(PlayerInteractEvent.RightClickBlock event) {
+        if (!event.getItemStack().is(Items.SNOW)) return;
+        var state = event.getLevel().getBlockState(event.getPos());
+        boolean plant = state.is(BlockTags.FLOWERS) || state.is(Blocks.SHORT_GRASS)
+            || state.is(Blocks.FERN) || state.is(Blocks.DEAD_BUSH)
+            || state.is(Blocks.BROWN_MUSHROOM) || state.is(Blocks.RED_MUSHROOM)
+            || state.is(Blocks.PINK_PETALS);
+        if (!plant) return;
+        event.setCancellationResult(InteractionResult.SUCCESS);
+        event.setCanceled(true);
+        if (event.getLevel().isClientSide()) return;
+        event.getLevel().setBlock(event.getPos(), Blocks.SNOW.defaultBlockState(), 3);
+        if (!event.getEntity().getAbilities().instabuild) event.getItemStack().shrink(1);
+    }
 
     @SubscribeEvent
     public static void tick(ServerTickEvent.Post event) {
@@ -47,9 +67,17 @@ public final class SnowFeatures {
                         boolean soft = overlay.isAir() || overlay.is(Blocks.SHORT_GRASS)
                             || overlay.is(Blocks.FERN) || overlay.is(Blocks.DEAD_BUSH)
                             || overlay.is(Blocks.DANDELION) || overlay.is(Blocks.POPPY)
-                            || overlay.is(Blocks.BLUE_ORCHID);
+                            || overlay.is(Blocks.BLUE_ORCHID) || overlay.is(Blocks.ALLIUM)
+                            || overlay.is(Blocks.AZURE_BLUET) || overlay.is(Blocks.OXEYE_DAISY)
+                            || overlay.is(Blocks.CORNFLOWER) || overlay.is(Blocks.LILY_OF_THE_VALLEY)
+                            || overlay.is(Blocks.RED_TULIP) || overlay.is(Blocks.ORANGE_TULIP)
+                            || overlay.is(Blocks.WHITE_TULIP) || overlay.is(Blocks.PINK_TULIP)
+                            || overlay.is(Blocks.PINK_PETALS) || overlay.is(Blocks.BROWN_MUSHROOM)
+                            || overlay.is(Blocks.RED_MUSHROOM);
                         var layer = Blocks.SNOW.defaultBlockState();
-                        if (soft && layer.canSurvive(level, sky)) {
+                        if (soft && (overlay.isAir() ? layer.canSurvive(level, sky) :
+                                level.getBlockState(sky.below()).isFaceSturdy(level, sky.below(),
+                                    net.minecraft.core.Direction.UP))) {
                             level.setBlock(sky, layer, 3);
                         }
                     }
