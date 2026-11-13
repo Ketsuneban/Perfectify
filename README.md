@@ -10,7 +10,7 @@
 [![Language](https://img.shields.io/badge/Java-21-f7ae61?style=for-the-badge&logo=openjdk&logoColor=white)](https://adoptium.net/)
 [![License](https://img.shields.io/badge/License-MIT-8ae0c2?style=for-the-badge)](LICENSE)
 
-[Website](https://yeta.pages.dev) · [Releases](https://github.com/Ketsuneban/Yeta/releases) · [English changelog](CHANGELOG_EN.md) · [История изменений](CHANGELOG_RU.md) · [Source code](src/main/java/dev/ketsuneban/yeta)
+[Website](https://yeta-6ip.pages.dev) · [Releases](https://github.com/Ketsuneban/Yeta/releases) · [English changelog](CHANGELOG_EN.md) · [История изменений](CHANGELOG_RU.md) · [Source code](src/main/java/dev/ketsuneban/yeta)
 
 </div>
 
