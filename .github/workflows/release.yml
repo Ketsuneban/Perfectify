@@ -1,0 +1,61 @@
+name: Yeta — publish release
+on:
+  workflow_run:
+    workflows: ["Yeta — verify and build"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  release:
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == 'Ketsuneban/Yeta'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - name: Resolve version and check existing release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(sed -n 's/^mod_version=//p' gradle.properties | head -n 1)
+          test -n "$VERSION"
+          echo "TAG=v$VERSION" >> "$GITHUB_ENV"
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo 'ALREADY_RELEASED=true' >> "$GITHUB_ENV"
+          else
+            echo 'ALREADY_RELEASED=false' >> "$GITHUB_ENV"
+          fi
+      - name: Download verified JAR
+        if: env.ALREADY_RELEASED == 'false'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          mkdir -p dist
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" -n Yeta-verified-JAR -D dist
+          test -n "$(find dist -name 'yeta-*.jar' -type f -print -quit)"
+      - name: Publish bilingual GitHub Release
+        if: env.ALREADY_RELEASED == 'false'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          {
+            printf '# Русский язык\n\n'
+            cat CHANGELOG_RU.md
+            printf '\n---\n\n# English\n\n'
+            cat CHANGELOG_EN.md
+          } > release-notes.md
+          gh release create "$TAG" dist/yeta-*.jar --target "$COMMIT_SHA" \
+            --title "Yeta $TAG" --notes-file release-notes.md --prerelease
