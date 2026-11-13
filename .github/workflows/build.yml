@@ -1,0 +1,99 @@
+name: Yeta — verify and build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'gradle.properties'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - '.github/workflows/build.yml'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: yeta-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Compile and smoke-test Yeta
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+      - name: Compile
+        run: gradle --no-daemon clean build --stacktrace
+      - name: Verify JAR
+        shell: bash
+        run: |
+          JAR=$(find build/libs -maxdepth 1 -name 'yeta-*.jar' -type f | head -n 1)
+          test -n "$JAR"
+          jar tf "$JAR" | grep -Fqx 'dev/ketsuneban/yeta/Yeta.class'
+          jar tf "$JAR" | grep -Fqx 'yeta.mixins.json'
+      - name: Verify dedicated server startup
+        shell: bash
+        run: |
+          mkdir -p run
+          printf 'eula=true\n' > run/eula.txt
+          set +e
+          timeout 125s gradle --no-daemon runServer --console=plain --stacktrace > server-smoke.log 2>&1
+          status=$?
+          set -e
+          tail -60 server-smoke.log
+          if ! grep -Fq 'Done (' server-smoke.log; then
+            echo 'Server did not complete startup'
+            exit 1
+          fi
+          if grep -Eq 'MixinApplyError|InvalidMixinException|InjectionError|Critical injection failure' server-smoke.log; then
+            echo 'Server mixin failure'
+            exit 1
+          fi
+          test "$status" = 0 -o "$status" = 124
+      - name: Verify client startup in virtual display
+        shell: bash
+        run: |
+          command -v xvfb-run
+          set +e
+          LIBGL_ALWAYS_SOFTWARE=1 timeout 135s xvfb-run -a -s '-screen 0 1280x720x24' gradle --no-daemon runClient --console=plain --stacktrace > client-smoke.log 2>&1
+          status=$?
+          set -e
+          tail -80 client-smoke.log
+          if ! grep -Eiq 'OpenGL|Backend library|Created:.*atlas' client-smoke.log; then
+            echo 'Client never reached renderer startup'
+            exit 1
+          fi
+          if grep -Eq 'MixinApplyError|InvalidMixinException|InjectionError|Critical injection failure' client-smoke.log; then
+            echo 'Client mixin failure'
+            exit 1
+          fi
+          test "$status" = 0 -o "$status" = 124
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: Yeta-verified-JAR
+          path: build/libs/yeta-*.jar
+          retention-days: 14
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Yeta-build-logs
+          path: |
+            server-smoke.log
+            client-smoke.log
+          if-no-files-found: ignore
+          retention-days: 7
