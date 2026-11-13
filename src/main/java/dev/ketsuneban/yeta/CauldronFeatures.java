@@ -147,11 +147,11 @@ public final class CauldronFeatures {
         if (stored != null && stored.isPotion() && held.is(Items.ARROW)) {
             interactDone(e);
             if (!(level instanceof ServerLevel sl)) return;
-            int available = stored.units() >= 6 ? 64 : stored.units() >= 4 ? 32
-                : stored.units() >= 2 ? 16 : 0;
-            if (available == 0) return;
+            int units = stored.units();
+            if (units <= 0) return;
+            int available = units >= 6 ? 64 : units >= 4 ? 32 : 16;
             int count = Math.min(held.getCount(), available);
-            int cost = count > 32 ? 6 : count > 16 ? 4 : 2;
+            int cost = count > 32 ? 6 : count > 16 ? 4 : units <= 3 ? units : 1;
             ItemStack arrows = new ItemStack(Items.TIPPED_ARROW, count);
             arrows.set(DataComponents.POTION_CONTENTS, potionData(stored));
             take(e.getEntity(), held, count);

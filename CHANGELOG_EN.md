@@ -16,7 +16,7 @@ Every project change is recorded here, including release preparation.
 - Added bilingual notes, project website and release automation.
 
 ### Interaction fixes
-- Fixed tipped arrow fluid cost: 16/32/64 arrows consume 1/2/3 levels respectively.
+- Fixed tipped arrow fluid cost: 1–16 arrows use one sixth of a sufficiently filled cauldron (or all remaining 1–3 sixths); 17–32 arrows use four sixths and 33–64 arrows use six sixths.
 - Water and lava buckets now defer to vanilla bucket interactions when replacing potion cauldrons.
 - Mixing plain water into a potion cauldron now consumes the water bottle and clears the contents.
 
