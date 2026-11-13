@@ -53,6 +53,17 @@ jobs:
           gh release edit v0.1.0 \
             --title 'Yeta v0.1.0 — superseded (invalid boat recipes)' \
             --notes '⚠️ This alpha contains invalid boat recipe JSON. Use v0.1.1 or newer. / В этой альфа-версии некорректные JSON-рецепты лодок. Установите v0.1.1 или новее.'
+      - name: Create immutable version tag
+        if: env.ALREADY_RELEASED == 'false'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if ! gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f "ref=refs/tags/$TAG" -f "sha=$COMMIT_SHA"
+          fi
       - name: Publish bilingual GitHub Release
         if: env.ALREADY_RELEASED == 'false'
         shell: bash
@@ -66,5 +77,5 @@ jobs:
             printf '\n---\n\n# English\n\n'
             cat CHANGELOG_EN.md
           } > release-notes.md
-          gh release create "$TAG" dist/yeta-*.jar --target "$COMMIT_SHA" \
+          gh release create "$TAG" dist/yeta-*.jar --verify-tag \
             --title "Yeta $TAG" --notes-file release-notes.md --prerelease
