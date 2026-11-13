@@ -9,6 +9,7 @@ on:
       - 'build.gradle'
       - 'settings.gradle'
       - '.github/workflows/build.yml'
+      - '.github/workflows/release.yml'
   pull_request:
   workflow_dispatch:
 
