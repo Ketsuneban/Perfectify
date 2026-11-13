@@ -66,7 +66,7 @@ Bedrock Edition — not supported
 
 ### <img src="https://api.iconify.design/lucide:package.svg" width="17" height="17"/> Releases
 
-[Latest release](https://github.com/Ketsuneban/Yeta/releases/latest)  
+[Latest release](https://github.com/Ketsuneban/Yeta/releases)  
 [All versions](https://github.com/Ketsuneban/Yeta/releases)
 
 </td></tr></table>

@@ -44,6 +44,15 @@ jobs:
           mkdir -p dist
           gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" -n Yeta-verified-JAR -D dist
           test -n "$(find dist -name 'yeta-*.jar' -type f -print -quit)"
+      - name: Mark superseded initial alpha
+        if: env.TAG == 'v0.1.1'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release edit v0.1.0 \
+            --title 'Yeta v0.1.0 — superseded (invalid boat recipes)' \
+            --notes '⚠️ This alpha contains invalid boat recipe JSON. Use v0.1.1 or newer. / В этой альфа-версии некорректные JSON-рецепты лодок. Установите v0.1.1 или новее.'
       - name: Publish bilingual GitHub Release
         if: env.ALREADY_RELEASED == 'false'
         shell: bash
