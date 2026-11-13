@@ -15,6 +15,11 @@ Every project change is recorded here, including release preparation.
 - Adjusted shield animation, map colors, sheep tinting, chat formatting and player portraits.
 - Added bilingual notes, project website and release automation.
 
+### Interaction fixes
+- Fixed tipped arrow fluid cost: 16/32/64 arrows consume 1/2/3 levels respectively.
+- Water and lava buckets now defer to vanilla bucket interactions when replacing potion cauldrons.
+- Mixing plain water into a potion cauldron now consumes the water bottle and clears the contents.
+
 ### Known limitations
 
 Full Bedrock parity and compatibility of all client Mixins require in-game validation. Certain rendering behavior remains experimental.

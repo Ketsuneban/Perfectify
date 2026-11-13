@@ -109,8 +109,8 @@ public final class CauldronFeatures {
                 update(sl, pos, null);
                 sl.levelEvent(2002, pos, incoming.getColor());
                 take(e.getEntity(), held, 1);
-                    if (!e.getEntity().getAbilities().instabuild)
-                        give(e.getEntity(), new ItemStack(Items.GLASS_BOTTLE));
+                if (!e.getEntity().getAbilities().instabuild)
+                    give(e.getEntity(), new ItemStack(Items.GLASS_BOTTLE));
                 return;
             }
             if (old == null && state.is(Blocks.WATER_CAULDRON)) {
@@ -147,13 +147,11 @@ public final class CauldronFeatures {
         if (stored != null && stored.isPotion() && held.is(Items.ARROW)) {
             interactDone(e);
             if (!(level instanceof ServerLevel sl)) return;
-            int count = Math.min(held.getCount(), 16);
-            int cost = stored.units() < 4 ? stored.units() : 1;
-            if (held.getCount() > 32 && stored.units() >= 6) {
-                count = Math.min(64, held.getCount()); cost = 6;
-            } else if (held.getCount() > 16 && stored.units() >= 4) {
-                count = Math.min(32, held.getCount()); cost = 4;
-            }
+            int available = stored.units() >= 6 ? 64 : stored.units() >= 4 ? 32
+                : stored.units() >= 2 ? 16 : 0;
+            if (available == 0) return;
+            int count = Math.min(held.getCount(), available);
+            int cost = count > 32 ? 6 : count > 16 ? 4 : 2;
             ItemStack arrows = new ItemStack(Items.TIPPED_ARROW, count);
             arrows.set(DataComponents.POTION_CONTENTS, potionData(stored));
             take(e.getEntity(), held, count);
@@ -195,12 +193,23 @@ public final class CauldronFeatures {
             return;
         }
 
-        if (stored != null && stored.isPotion() && (held.is(Items.WATER_BUCKET) ||
-                held.is(Items.LAVA_BUCKET) || (addingPotion && incoming != null && incoming.is(Potions.WATER)))) {
+        if (stored != null && stored.isPotion() &&
+                (held.is(Items.WATER_BUCKET) || held.is(Items.LAVA_BUCKET))) {
+            if (level instanceof ServerLevel sl) {
+                CauldronStorage.of(sl).remove(pos);
+            }
+            return;
+        }
+
+        if (stored != null && stored.isPotion() && addingPotion &&
+                incoming != null && incoming.is(Potions.WATER)) {
             interactDone(e);
             if (level instanceof ServerLevel sl) {
                 update(sl, pos, null);
                 sl.levelEvent(2002, pos, potionData(stored).getColor());
+                take(e.getEntity(), held, 1);
+                if (!e.getEntity().getAbilities().instabuild)
+                    give(e.getEntity(), new ItemStack(Items.GLASS_BOTTLE));
             }
         }
     }
