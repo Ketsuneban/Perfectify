@@ -131,6 +131,31 @@ public final class CauldronFeatures {
             return;
         }
 
+        if (stored != null && stored.isPotion() && held.is(Items.BUCKET)) {
+            interactDone(e);
+            return;
+        }
+
+        if (stored != null && stored.mode().equals("dye") &&
+                (held.is(Items.WATER_BUCKET) || held.is(Items.LAVA_BUCKET) ||
+                 (held.is(Items.BUCKET) && state.getValue(LayeredCauldronBlock.LEVEL) == 3))) {
+            if (level instanceof ServerLevel sl) CauldronStorage.of(sl).remove(pos);
+            return;
+        }
+
+        if (stored != null && stored.mode().equals("dye") && held.is(Items.GLASS_BOTTLE)) {
+            interactDone(e);
+            if (!(level instanceof ServerLevel sl)) return;
+            ItemStack water = PotionContents.createItemStack(Items.POTION, Potions.WATER);
+            take(e.getEntity(), held, 1);
+            give(e.getEntity(), water);
+            int levelValue = state.getValue(LayeredCauldronBlock.LEVEL);
+            if (levelValue > 1)
+                sl.setBlock(pos, state.setValue(LayeredCauldronBlock.LEVEL, levelValue - 1), 3);
+            else update(sl, pos, null);
+            return;
+        }
+
         if (stored != null && stored.isPotion() && held.is(Items.GLASS_BOTTLE)) {
             interactDone(e);
             if (!(level instanceof ServerLevel sl) || stored.units() < 2) return;
