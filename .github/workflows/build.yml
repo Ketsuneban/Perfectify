@@ -44,8 +44,10 @@ jobs:
           test -n "$JAR"
           jar tf "$JAR" | grep -Fqx 'dev/ketsuneban/yeta/Yeta.class'
           jar tf "$JAR" | grep -Fqx 'yeta.mixins.json'
-          RECIPE_COUNT=$(jar tf "$JAR" | grep -Ec '^data/minecraft/recipe/.*[.]json$')
-          test "$RECIPE_COUNT" -eq 9
+          BOAT_RECIPE_COUNT=$(jar tf "$JAR" | grep -Ec '^data/minecraft/recipe/.*[.]json$')
+          ARMOR_RECIPE_COUNT=$(jar tf "$JAR" | grep -Ec '^data/yeta/recipe/chainmail_.*[.]json$')
+          test "$BOAT_RECIPE_COUNT" -eq 9
+          test "$ARMOR_RECIPE_COUNT" -eq 4
       - name: Verify dedicated server startup
         shell: bash
         run: |

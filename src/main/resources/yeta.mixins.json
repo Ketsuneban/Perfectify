@@ -4,11 +4,20 @@
   "package": "dev.ketsuneban.yeta.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "FallingSnowMixin"
+    "BedBlockMixin",
+    "BoatMixin",
+    "DoorBlockMixin",
+    "FaceAttachedBlockMixin",
+    "FallingSnowLandingMixin",
+    "FallingSnowMixin",
+    "PistonBaseBlockMixin"
   ],
   "client": [
+    "BeaconRendererMixin",
+    "BlockColorsMixin",
     "ShieldHandRendererMixin",
     "MapPaletteMixin",
+    "MultiPlayerGameModeMixin",
     "SheepRendererMixin",
     "ChatHeadMixin"
   ],

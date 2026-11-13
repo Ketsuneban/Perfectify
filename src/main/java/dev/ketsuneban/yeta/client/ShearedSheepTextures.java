@@ -44,7 +44,8 @@ public final class ShearedSheepTextures {
 
                         int range = Math.max(red, Math.max(green, blue))
                             - Math.min(red, Math.min(green, blue));
-                        if (alpha > 10 && red > 180 && green > 180 && blue > 180
+                        boolean eyePixels = y >= 9 && y <= 11 && x >= 7 && x <= 14;
+                        if (!eyePixels && alpha > 10 && red > 180 && green > 180 && blue > 180
                             && range < 14) {
                             float brightness = (red + green + blue) / (3.0F * 255.0F);
                             int r = clamp(targetR * brightness);

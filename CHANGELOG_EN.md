@@ -2,6 +2,28 @@
 
 Every project change is recorded here, including release preparation.
 
+## 0.2.0 — November 13, 2026
+
+- Extended beacon beam visibility to 1024 blocks.
+- Leaves now whiten gradually during snowfall and fade back after it ends.
+- Added four chainmail crafting recipes using chains.
+- Brought Wither difficulty closer to Bedrock with 300/450/600 health, stronger damage and a second-phase Wither Skeleton wave.
+- Ender Dragon damage now scales by difficulty closer to Bedrock Edition.
+- Zombified Piglins alert nearby allies even when one is killed instantly.
+- Horses can board boats automatically.
+- Block-breaking progress survives switching between suitable tools.
+- Door and bed outlines include both halves.
+- Pistons can move inventories while preserving their contents.
+- Levers and buttons attached to pistons no longer break on activation.
+- Fixed armor-stand pose cycling and full off-hand item insertion/removal.
+- Potion and dyed-water cauldron colors now sync to clients; witch-hut potion generation is more reliable.
+- Chat heads include the skin overlay, and indentation applies only to player chat without affecting the input field.
+- Snow accumulates to eight layers, merges after falling and can cover grass, flowers and other soft plants.
+- Iron Golems reliably perform the poppy gesture near child villagers.
+- Kept the softer map palette and ported current map-item, player-marker and locator-bar textures.
+- Fixed sheared sheep eye whites being tinted.
+- Split the website into Home, Content, Updates, Source code and Information pages and corrected its labels and metadata.
+
 ## 0.1.1 — November 13, 2026
 
 - Fixed all nine boat recipes: Minecraft 1.21.1 requires ingredient objects rather than string entries.
