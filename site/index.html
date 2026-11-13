@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a1018">
+<meta name="description" content="Yeta — open-source Minecraft Java Edition enhancements with Bedrock-inspired mechanics. Downloads, releases, platforms and source code.">
+<meta property="og:title" content="Yeta — Minecraft, refined."><meta property="og:description" content="Minecraft Java Edition quality-of-life mod for NeoForge 1.21.1">
+<title>Yeta — Minecraft, refined.</title><link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+:root{color-scheme:dark;--bg:#090e15;--panel:#101720;--panel2:#121d27;--ink:#e8f3f2;--muted:#849a9e;--accent:#7becd0;--line:#26353b;--lilac:#b7a3ff}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(ellipse at 70% 4%,#16362e 0%,transparent 31%),radial-gradient(ellipse at 20% 75%,#171a34 0%,transparent 32%),var(--bg);font:15px/1.58 Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;color:var(--ink)}
+a{color:inherit;text-decoration:none}button{font:inherit;cursor:pointer}svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.wrap{max-width:1440px;margin:0 auto;display:grid;grid-template-columns:230px minmax(0,1fr) 258px;gap:44px;padding:32px 44px 90px}.left{position:sticky;top:30px;height:calc(100vh - 60px);display:flex;flex-direction:column;gap:24px}.brand{display:flex;gap:12px;align-items:center;font-size:26px;font-weight:800;letter-spacing:-.07em}.brand .mark{width:42px;height:42px;display:grid;place-items:center;border:1px solid #89ffe164;border-radius:14px;background:linear-gradient(135deg,#7becd02a,#7becd005);box-shadow:inset 0 1px #ffffff26}.brand svg{width:27px;height:27px;stroke:var(--accent);stroke-width:3}
+.kicker{font-size:10px;letter-spacing:.19em;text-transform:uppercase;color:var(--muted);font-weight:800;margin:16px 0 9px}.nav{display:grid;gap:5px}.nav a{display:flex;gap:13px;align-items:center;padding:10px 13px;border-radius:11px;color:#9bb1b2;transition:background .15s,color .15s}.nav a:hover,.nav a.active{background:#16302d;color:var(--accent)}.nav svg{width:18px}.lefthint{margin-top:auto;border-top:1px solid var(--line);padding-top:22px;color:var(--muted);font-size:12px}.lang{border:1px solid var(--line);background:#14212a;padding:7px 12px;border-radius:9px;color:var(--ink);align-self:flex-start}
+main{min-width:0;padding-top:47px}.eyebrow{color:var(--accent);letter-spacing:.2em;font-size:11px;font-weight:800;text-transform:uppercase;display:flex;align-items:center;gap:10px}.eyebrow::before{content:"";width:24px;height:2px;background:var(--accent)}h1{font-size:clamp(56px,7vw,100px);line-height:1.01;letter-spacing:-.075em;margin:21px 0 12px;font-weight:850}h1 span{color:var(--accent)}.headline{font-size:clamp(20px,2vw,27px);letter-spacing:-.035em;margin:0;color:#d2e2e4}.intro{font-size:16px;color:var(--muted);max-width:720px;margin:23px 0 27px}
+.actions{display:flex;flex-wrap:wrap;gap:11px}.btn{display:inline-flex;align-items:center;gap:9px;padding:12px 16px;border-radius:12px;border:1px solid var(--line);background:#17242c;font-weight:680;font-size:13px;transition:transform .14s,background .14s}.btn:hover{transform:translateY(-2px);background:#243439}.btn.primary{background:var(--accent);border-color:var(--accent);color:#0a211d}.btn svg{width:17px;height:17px}
+.stats{display:flex;flex-wrap:wrap;gap:15px;margin:33px 0 42px}.stat{padding:10px 15px;border:1px solid var(--line);background:#121e258e;border-radius:10px;display:flex;gap:9px;align-items:center;color:#b6c9c6;font-size:12px}.stat svg{color:var(--accent);width:16px}
+section{scroll-margin-top:40px;margin:0 0 47px}.sectiontop{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}h2{font-size:24px;letter-spacing:-.04em;margin:0}h3{font-size:15px;margin:0 0 6px}.muted{color:var(--muted)}.small{font-size:12px}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}.tile{border:1px solid var(--line);border-radius:17px;background:linear-gradient(140deg,#182530,#101820);padding:21px;min-height:151px}.tile .ic{width:38px;height:38px;display:grid;place-items:center;border-radius:11px;background:#20453c;color:var(--accent);margin-bottom:16px}.tile:nth-child(2n) .ic{background:#2d2945;color:var(--lilac)}.tile p{font-size:13px;color:var(--muted);margin:6px 0 0}.tile strong{font-size:15px}
+.release{display:flex;align-items:center;gap:15px;padding:17px 19px;background:#111d27;border:1px solid var(--line);border-radius:15px;margin-bottom:9px}.release .ic{color:var(--accent);background:#14342e;border-radius:12px;width:41px;height:41px;display:grid;place-items:center}.release .details{flex:1;min-width:0}.release .details div{font-weight:730}.release .details p{margin:3px 0 0;color:var(--muted);font-size:12px}.release .go{color:var(--accent)}.release .go svg{width:18px}.release:hover{border-color:#4b8373}
+.right{position:sticky;top:35px;height:max-content;padding-top:51px}.sidebar-title{font-size:12px;text-transform:uppercase;letter-spacing:.14em;font-weight:760;color:#d3e6e1;margin-bottom:16px}.meta{border-left:1px solid #2a4241;padding:0 0 10px 20px;margin:0 0 29px}.metarow{display:flex;gap:10px;align-items:center;margin:13px 0;font-size:12px;color:#c0d4d1}.metarow svg{width:16px;color:var(--accent)}.pill{display:inline-block;border:1px solid #2e554c;background:#12372f;color:#9cf1da;border-radius:5px;padding:1px 6px;font-size:10px}.planned{display:inline-block;border:1px solid #4d455e;background:#28243c;color:#baa8ef;border-radius:5px;padding:1px 6px;font-size:10px}.divider{border-top:1px solid var(--line);margin:20px 0}.foot{border-top:1px solid var(--line);padding:18px 0 5px;color:#6e858c;font-size:12px}
+@media(max-width:1150px){.wrap{grid-template-columns:180px minmax(0,1fr);gap:25px;padding:25px}.right{grid-column:2;position:static;padding:0;display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.right .sidebar-title{font-size:11px}.meta{margin:0}}
+@media(max-width:730px){.wrap{display:block;padding:16px}.left{position:static;height:auto;flex-direction:row;align-items:center;flex-wrap:wrap;gap:11px}.brand{font-size:22px}.brand .mark{width:35px;height:35px}.left .kicker,.lefthint{display:none}.nav{display:flex;flex-wrap:wrap;gap:3px;order:3;width:100%;overflow:auto}.nav a{font-size:12px;padding:7px 9px}.nav a svg{width:14px}.lang{margin-left:auto}main{padding-top:42px}.grid{grid-template-columns:1fr 1fr}.tile{padding:13px;min-height:140px}.stats{gap:7px}.stat{padding:7px 10px}.right{display:block}.meta{padding-left:14px;margin-bottom:18px}h1{font-size:65px}}
+@media(max-width:430px){.grid{grid-template-columns:1fr}h1{font-size:58px}}
+</style>
+</head>
+<body>
+<svg style="position:absolute;width:0;height:0;overflow:hidden" xmlns="http://www.w3.org/2000/svg">
+<symbol id="i-cube" viewBox="0 0 24 24"><path d="m12 2 9 5-9 5-9-5 9-5Zm-9 5v10l9 5 9-5V7M12 12v10"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/></symbol>
+<symbol id="i-git" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m8 15 4-10 4 10M9.5 12h5"/></symbol>
+<symbol id="i-gear" viewBox="0 0 24 24"><path d="M12 2 9.7 5.3l-4-.3-.6 4-3 3 3 3 .6 4 4-.3L12 22l2.3-3.3 4 .3.6-4 3-3-3-3-.6-4-4 .3L12 2Z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-layer" viewBox="0 0 24 24"><path d="m12 2 10 6-10 6L2 8l10-6Zm-10 10 10 6 10-6M2 16l10 6 10-6"/></symbol>
+<symbol id="i-code" viewBox="0 0 24 24"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-16-4 22"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="m4 12 5 5L20 6"/></symbol>
+<symbol id="i-flask" viewBox="0 0 24 24"><path d="M9 2h6M10 2v8L4 20c-.4.8 0 2 2 2h12c2 0 2.4-1.2 2-2l-6-10V2M8 15h8"/></symbol>
+<symbol id="i-snow" viewBox="0 0 24 24"><path d="M12 2v20M4 6l16 12M4 18 20 6M9 5l3 3 3-3M9 19l3-3 3 3"/></symbol>
+<symbol id="i-heart" viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></symbol>
+<symbol id="i-screen" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="15" rx="2"/><path d="M8 22h8m-4-4v4"/></symbol>
+<symbol id="i-cpu" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 9h6v6H9zM9 1v4m6-4v4M9 19v4m6-4v4M1 9h4m-4 6h4m14-6h4m-4 6h4"/></symbol>
+<symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-7-7 7 7-7 7"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 2 21 6v7c0 5-4 8-9 9-5-1-9-4-9-9V6l9-4Z"/><path d="m8 12 3 3 5-6"/></symbol>
+<symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 11c0 5-4 9-9 9a9 9 0 0 1-4-.8L3 21l1.8-5A9 9 0 1 1 21 11Z"/></symbol>
+</svg>
+<div class="wrap">
+<aside class="left">
+<a class="brand" href="#home"><span class="mark"><svg viewBox="0 0 24 24"><path d="m3 3 9 10 9-10M12 13v8"/></svg></span>YETA</a>
+<div class="kicker" data-ru="Навигация" data-en="Navigation">Навигация</div>
+<nav class="nav"><a class="active" href="#home"><svg><use href="#i-cube"/></svg><span data-ru="Главная" data-en="Overview">Главная</span></a><a href="#features"><svg><use href="#i-gear"/></svg><span data-ru="Возможности" data-en="Features">Возможности</span></a><a href="#releases"><svg><use href="#i-download"/></svg><span data-ru="Релизы" data-en="Releases">Релизы</span></a><a href="https://github.com/Ketsuneban/Yeta" target="_blank" rel="noopener"><svg><use href="#i-git"/></svg>GitHub</a></nav>
+<button class="lang" id="language" aria-label="Switch language">EN / RU</button>
+<div class="lefthint" data-ru="Сделано для тех, кому важны детали." data-en="Built for people who notice the details.">Сделано для тех, кому важны детали.</div>
+</aside>
+<main id="home">
+<div class="eyebrow">Minecraft Java Edition · NeoForge</div>
+<h1>Meet <span>Yeta.</span></h1>
+<p class="headline" data-ru="Minecraft, доведённый до совершенства." data-en="Minecraft, refined.">Minecraft, доведённый до совершенства.</p>
+<p class="intro" data-ru="Механики Bedrock, более продуманный мир и удобные мелочи для Java Edition. Открытый исходный код, понятные версии и никаких лишних зависимостей." data-en="Bedrock-inspired behavior, a more thoughtful world and quality-of-life improvements for Java Edition. Open source, clear versioning, no unnecessary dependencies.">Механики Bedrock, более продуманный мир и удобные мелочи для Java Edition. Открытый исходный код, понятные версии и никаких лишних зависимостей.</p>
+<div class="actions"><a class="btn primary" id="download" href="https://github.com/Ketsuneban/Yeta/releases"><svg><use href="#i-download"/></svg><span data-ru="Скачать Yeta" data-en="Download Yeta">Скачать Yeta</span></a><a class="btn" href="https://github.com/Ketsuneban/Yeta" target="_blank" rel="noopener"><svg><use href="#i-code"/></svg><span data-ru="Исходный код" data-en="Source code">Исходный код</span></a></div>
+<div class="stats"><div class="stat"><svg><use href="#i-check"/></svg><span>Open Source · MIT</span></div><div class="stat"><svg><use href="#i-cube"/></svg>Minecraft 1.21.1</div><div class="stat"><svg><use href="#i-shield"/></svg>NeoForge 21.1.x</div></div>
+<section id="features"><div class="sectiontop"><h2 data-ru="Маленькие детали. Большая разница." data-en="Small details. Bigger difference.">Маленькие детали. Большая разница.</h2></div>
+<div class="grid">
+<div class="tile"><div class="ic"><svg><use href="#i-flask"/></svg></div><strong data-ru="Котлы и зелья" data-en="Potion cauldrons">Котлы и зелья</strong><p data-ru="Окрашивание воды, наполнение бутылок, стрелы с эффектами и зелья в хижинах ведьм." data-en="Dyed water, potion bottles, tipped arrows and weighted witch-hut potions.">Окрашивание воды, наполнение бутылок, стрелы с эффектами и зелья в хижинах ведьм.</p></div>
+<div class="tile"><div class="ic"><svg><use href="#i-snow"/></svg></div><strong data-ru="Живой снег" data-en="Living snowfall">Живой снег</strong><p data-ru="Неравномерное медленное накопление, физика падения слоёв и покрытие растений." data-en="Slow, uneven snow accumulation, falling layers and plant coverage.">Неравномерное медленное накопление, физика падения слоёв и покрытие растений.</p></div>
+<div class="tile"><div class="ic"><svg><use href="#i-cube"/></svg></div><strong data-ru="Стойки для брони" data-en="Armor stands">Стойки для брони</strong><p data-ru="Руки, предметы во второй руке, 13 поз и управление сигналом редстоуна." data-en="Arms, offhand equipment, 13 poses and redstone signal control.">Руки, предметы во второй руке, 13 поз и управление сигналом редстоуна.</p></div>
+<div class="tile"><div class="ic"><svg><use href="#i-heart"/></svg></div><strong data-ru="Умнее и живее" data-en="Smarter and warmer">Умнее и живее</strong><p data-ru="Разнообразнее движения мобов, цветы железных големов и улучшенные визуальные детали." data-en="More tactical mob movement, iron golem poppies and visual polish.">Разнообразнее движения мобов, цветы железных големов и улучшенные визуальные детали.</p></div>
+<div class="tile"><div class="ic"><svg><use href="#i-chat"/></svg></div><strong data-ru="Удобный чат" data-en="Better chat">Удобный чат</strong><p data-ru="Цветовые коды, подсветка имён игроков и изображения скинов рядом с сообщениями." data-en="Color codes, highlighted player names and skin portraits next to messages.">Цветовые коды, подсветка имён игроков и изображения скинов рядом с сообщениями.</p></div>
+<div class="tile"><div class="ic"><svg><use href="#i-screen"/></svg></div><strong data-ru="Визуальные мелочи" data-en="Visual refinements">Визуальные мелочи</strong><p data-ru="Мягче цвета карт, правки анимации щита и заметный цвет шерсти у остриженных овец." data-en="Softer map colors, shield animation adjustments and visible wool color on sheared sheep.">Мягче цвета карт, правки анимации щита и заметный цвет шерсти у остриженных овец.</p></div>
+</div></section>
+<section id="releases"><div class="sectiontop"><h2 data-ru="Релизы и версии" data-en="Releases and versions">Релизы и версии</h2><a class="small muted" href="https://github.com/Ketsuneban/Yeta/releases" data-ru="Все на GitHub ↗" data-en="All on GitHub ↗">Все на GitHub ↗</a></div>
+<div id="releaseList"><div class="release"><div class="ic"><svg><use href="#i-download"/></svg></div><div class="details"><div data-ru="Загрузка версий…" data-en="Loading releases…">Загрузка версий…</div><p data-ru="Данные обновляются из GitHub" data-en="Data comes from GitHub">Данные обновляются из GitHub</p></div></div></div>
+</section>
+<footer class="foot"><span data-ru="Yeta — независимый проект, не связанный с Mojang или Microsoft. MIT · 2026." data-en="Yeta is an independent fan project, not affiliated with Mojang or Microsoft. MIT · 2026.">Yeta — независимый проект, не связанный с Mojang или Microsoft. MIT · 2026.</span></footer>
+</main>
+<aside class="right">
+<div><div class="sidebar-title" data-ru="Поддерживаемые версии" data-en="Supported versions">Поддерживаемые версии</div><div class="meta"><div class="metarow"><svg><use href="#i-check"/></svg><strong>Minecraft 1.21.1</strong><span class="pill" data-ru="Активно" data-en="Active">Активно</span></div><div class="metarow"><svg><use href="#i-layer"/></svg><span data-ru="Другие версии" data-en="Other versions">Другие версии</span><span class="planned" data-ru="Позже" data-en="Planned">Позже</span></div></div></div>
+<div><div class="sidebar-title" data-ru="Платформы" data-en="Platforms">Платформы</div><div class="meta"><div class="metarow"><svg><use href="#i-screen"/></svg>Windows</div><div class="metarow"><svg><use href="#i-screen"/></svg>Linux</div><div class="metarow"><svg><use href="#i-screen"/></svg>macOS</div><div class="small muted">Minecraft Java Edition</div></div></div>
+<div><div class="sidebar-title" data-ru="Движки и технологии" data-en="Engines & technology">Движки и технологии</div><div class="meta"><div class="metarow"><svg><use href="#i-cpu"/></svg>Java 21 · NeoForge <span class="pill" data-ru="Сейчас" data-en="Current">Сейчас</span></div><div class="metarow"><svg><use href="#i-code"/></svg>Rust <span class="planned" data-ru="В планах" data-en="Planned">В планах</span></div></div></div>
+</aside></div>
+<script>
+(function(){
+let lang=localStorage.getItem("yeta-lang")||"ru";
+const labels={ru:{unavailable:"Релизы пока не опубликованы",hint:"Перейти на GitHub Releases",updated:"Опубликовано",assets:"Скачать JAR"},en:{unavailable:"No releases published yet",hint:"View GitHub Releases",updated:"Published",assets:"Download JAR"}};
+function apply(){document.documentElement.lang=lang;document.querySelectorAll("[data-"+lang+"]").forEach(function(el){el.textContent=el.getAttribute("data-"+lang);});document.getElementById("language").textContent=lang==="ru"?"EN":"RU";}
+document.getElementById("language").addEventListener("click",function(){lang=lang==="ru"?"en":"ru";localStorage.setItem("yeta-lang",lang);apply();renderReleases(window.yetaReleases||[])});
+document.querySelectorAll(".nav a[href^='#']").forEach(function(link){link.addEventListener("click",function(){document.querySelectorAll(".nav a").forEach(function(a){a.classList.remove("active")});link.classList.add("active")})});
+function safe(t){return String(t).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function renderReleases(list){
+let target=document.getElementById("releaseList");
+if(!list.length){target.innerHTML='<div class="release"><div class="ic"><svg><use href="#i-download"/></svg></div><div class="details"><div>'+labels[lang].unavailable+'</div><p>'+labels[lang].hint+'</p></div><a class="go" href="https://github.com/Ketsuneban/Yeta/releases"><svg><use href="#i-arrow"/></svg></a></div>';return}
+target.innerHTML=list.slice(0,6).map(function(item){let jar=(item.assets||[]).find(function(a){return a.name.toLowerCase().endsWith(".jar")});let link=jar?jar.browser_download_url:item.html_url;let date=new Date(item.published_at||item.created_at).toLocaleDateString(lang==="ru"?"ru-RU":"en-US",{year:"numeric",month:"short",day:"numeric"});return '<a class="release" href="'+safe(link)+'" target="_blank" rel="noopener"><div class="ic"><svg><use href="#i-download"/></svg></div><div class="details"><div>'+safe(item.name||item.tag_name)+'</div><p>'+labels[lang].updated+' '+safe(date)+' · '+(jar?labels[lang].assets:"GitHub")+'</p></div><div class="go"><svg><use href="#i-arrow"/></svg></div></a>'}).join("");
+let jar=(list[0].assets||[]).find(function(a){return a.name.toLowerCase().endsWith(".jar")});document.getElementById("download").href=jar?jar.browser_download_url:list[0].html_url;
+}
+apply();fetch("https://api.github.com/repos/Ketsuneban/Yeta/releases?per_page=10",{headers:{"Accept":"application/vnd.github+json"}}).then(function(r){if(!r.ok)throw Error("HTTP "+r.status);return r.json()}).then(function(list){window.yetaReleases=list;renderReleases(list)}).catch(function(){renderReleases([])});
+})();
+</script>
+</body>
+</html>
