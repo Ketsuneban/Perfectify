@@ -6,8 +6,12 @@
     "PPP"
   ],
   "key": {
-    "P": "minecraft:mangrove_planks",
-    "S": "minecraft:wooden_shovel"
+    "P": {
+      "item": "minecraft:mangrove_planks"
+    },
+    "S": {
+      "item": "minecraft:wooden_shovel"
+    }
   },
   "result": {
     "id": "minecraft:mangrove_boat",

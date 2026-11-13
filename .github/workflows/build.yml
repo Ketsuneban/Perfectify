@@ -64,6 +64,10 @@ jobs:
           wait "$runner" || true
           tail -50 server-smoke.log
           test "$ready" = 1
+          if grep -Eiq 'Parsing error loading recipe|Failed to parse recipe|Failed to load recipe' server-smoke.log; then
+            echo 'Minecraft rejected an embedded recipe'
+            exit 1
+          fi
           if grep -Eq 'MixinApplyError|InvalidMixinException|InjectionError|Critical injection failure' server-smoke.log; then exit 1; fi
       - name: Verify client startup in virtual display
         shell: bash

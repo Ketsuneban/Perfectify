@@ -2,6 +2,12 @@
 
 Every project change is recorded here, including release preparation.
 
+## 0.1.1 — November 13, 2026
+
+- Fixed all nine boat recipes: Minecraft 1.21.1 requires ingredient objects rather than string entries.
+- CI now rejects JARs when RecipeManager reports recipe parsing failures.
+- The initial 0.1.0 alpha had malformed recipes and is superseded by this release.
+
 ## 0.1.0 — November 13, 2026
 
 - Created the new public Yeta repository and migrated sources from Perfectify.

@@ -6,8 +6,12 @@
     "PPP"
   ],
   "key": {
-    "P": "minecraft:birch_planks",
-    "S": "minecraft:wooden_shovel"
+    "P": {
+      "item": "minecraft:birch_planks"
+    },
+    "S": {
+      "item": "minecraft:wooden_shovel"
+    }
   },
   "result": {
     "id": "minecraft:birch_boat",
