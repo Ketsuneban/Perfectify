@@ -5,7 +5,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import net.minecraft.advancements.CriteriaTriggers;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerBossEvent;
@@ -13,11 +15,13 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.BossEvent;
+import net.minecraft.world.Difficulty;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.GlowSquid;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -34,7 +38,7 @@ import net.minecraft.world.entity.monster.AbstractSkeleton;
 import net.minecraft.world.entity.monster.ElderGuardian;
 import net.minecraft.world.entity.monster.Shulker;
 import net.minecraft.world.entity.projectile.AbstractArrow;
-import net.minecraft.world.entity.projectile.FishingHook;
+import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.entity.projectile.ThrownTrident;
 import net.minecraft.world.entity.vehicle.AbstractMinecart;
 import net.minecraft.world.item.DyeItem;
@@ -44,8 +48,10 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.WitherSkullBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.EventPriority;
@@ -73,11 +79,79 @@ public final class AdvancedGameplayFeatures {
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void ensureWitherSpawn(BlockEvent.EntityPlaceEvent event) {
-        if (!event.getLevel().isClientSide()
-                && (event.getPlacedBlock().is(Blocks.WITHER_SKELETON_SKULL)
-                || event.getPlacedBlock().is(Blocks.WITHER_SKELETON_WALL_SKULL))) {
-            WitherSkullBlock.checkSpawn((net.minecraft.world.level.Level)event.getLevel(), event.getPos());
+        if (!(event.getLevel() instanceof ServerLevel level)
+                || (!event.getPlacedBlock().is(Blocks.WITHER_SKELETON_SKULL)
+                && !event.getPlacedBlock().is(Blocks.WITHER_SKELETON_WALL_SKULL))) return;
+
+        WitherSkullBlock.checkSpawn(level, event.getPos());
+        if (level.getBlockState(event.getPos()).is(Blocks.WITHER_SKELETON_SKULL)
+                || level.getBlockState(event.getPos()).is(Blocks.WITHER_SKELETON_WALL_SKULL)) {
+            trySpawnWitherFromSoulBlocks(level, event.getPos());
         }
+    }
+
+    private static boolean trySpawnWitherFromSoulBlocks(ServerLevel level, BlockPos placedHead) {
+        if (level.getDifficulty() == Difficulty.PEACEFUL
+                || placedHead.getY() < level.getMinBuildHeight() + 2) return false;
+
+        for (Direction along : new Direction[]{Direction.EAST, Direction.SOUTH}) {
+            for (int placedOffset = -1; placedOffset <= 1; placedOffset++) {
+                BlockPos center = placedHead.below().relative(along, -placedOffset);
+                if (!matchesWitherStructure(level, center, along)) continue;
+                spawnWither(level, center, along);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean matchesWitherStructure(ServerLevel level, BlockPos center, Direction along) {
+        if (!isSoulBase(level.getBlockState(center.below()))
+                || !level.getBlockState(center.below().relative(along)).isAir()
+                || !level.getBlockState(center.below().relative(along.getOpposite())).isAir()) return false;
+
+        for (int offset = -1; offset <= 1; offset++) {
+            if (!isSoulBase(level.getBlockState(center.relative(along, offset)))
+                    || !isWitherHead(level.getBlockState(center.above().relative(along, offset)))) return false;
+        }
+        return true;
+    }
+
+    private static boolean isSoulBase(BlockState state) {
+        return state.is(Blocks.SOUL_SAND) || state.is(Blocks.SOUL_SOIL);
+    }
+
+    private static boolean isWitherHead(BlockState state) {
+        return state.is(Blocks.WITHER_SKELETON_SKULL) || state.is(Blocks.WITHER_SKELETON_WALL_SKULL);
+    }
+
+    private static void spawnWither(ServerLevel level, BlockPos center, Direction along) {
+        WitherBoss wither = EntityType.WITHER.create(level);
+        if (wither == null) return;
+
+        ArrayList<BlockPos> structure = new ArrayList<>();
+        structure.add(center.below());
+        for (int offset = -1; offset <= 1; offset++) {
+            structure.add(center.relative(along, offset));
+            structure.add(center.above().relative(along, offset));
+        }
+        for (BlockPos pos : structure) {
+            BlockState state = level.getBlockState(pos);
+            level.levelEvent(2001, pos, Block.getId(state));
+            level.setBlock(pos, Blocks.AIR.defaultBlockState(), 2);
+        }
+
+        BlockPos foot = center.below();
+        float yaw = along.getAxis() == Direction.Axis.X ? 0.0F : 90.0F;
+        wither.moveTo(foot.getX() + 0.5, foot.getY() + 0.55, foot.getZ() + 0.5, yaw, 0.0F);
+        wither.yBodyRot = yaw;
+        wither.makeInvulnerable();
+        for (ServerPlayer player : level.getEntitiesOfClass(ServerPlayer.class,
+                wither.getBoundingBox().inflate(50.0))) {
+            CriteriaTriggers.SUMMONED_ENTITY.trigger(player, wither);
+        }
+        level.addFreshEntity(wither);
+        for (BlockPos pos : structure) level.updateNeighborsAt(pos, Blocks.AIR);
     }
 
     @SubscribeEvent
@@ -87,7 +161,7 @@ public final class AdvancedGameplayFeatures {
                 && !wither.getPersistentData().getBoolean(WITHER_DEATH_BLAST)) {
             wither.getPersistentData().putBoolean(WITHER_DEATH_BLAST, true);
             level.explode(wither, wither.getX(), wither.getY() + 1.0, wither.getZ(),
-                10.0F, false, net.minecraft.world.level.Level.ExplosionInteraction.NONE);
+                10.0F, false, net.minecraft.world.level.Level.ExplosionInteraction.MOB);
         }
         if (event.getEntity() instanceof ElderGuardian guardian) {
             ServerBossEvent bar = ELDER_BARS.remove(guardian.getUUID());
@@ -186,7 +260,7 @@ public final class AdvancedGameplayFeatures {
                 setWaterBabyScale((LivingEntity)entity, false);
             }
         }
-        if (entity instanceof AbstractArrow || entity instanceof ThrownTrident || entity instanceof FishingHook) {
+        if (entity instanceof Projectile) {
             bounceAtWorldBorder(entity);
         }
     }
@@ -196,9 +270,16 @@ public final class AdvancedGameplayFeatures {
         Vec3 movement = entity.getDeltaMovement();
         double nextX = entity.getX() + movement.x;
         double nextZ = entity.getZ() + movement.z;
-        boolean bounceX = nextX <= border.getMinX() + 0.1 || nextX >= border.getMaxX() - 0.1;
-        boolean bounceZ = nextZ <= border.getMinZ() + 0.1 || nextZ >= border.getMaxZ() - 0.1;
+        double margin = Math.max(0.1, entity.getBbWidth() * 0.5);
+        boolean bounceX = movement.x > 0.0 && nextX >= border.getMaxX() - margin
+            || movement.x < 0.0 && nextX <= border.getMinX() + margin;
+        boolean bounceZ = movement.z > 0.0 && nextZ >= border.getMaxZ() - margin
+            || movement.z < 0.0 && nextZ <= border.getMinZ() + margin;
         if (bounceX || bounceZ) {
+            entity.setPos(
+                Math.max(border.getMinX() + margin, Math.min(border.getMaxX() - margin, entity.getX())),
+                entity.getY(),
+                Math.max(border.getMinZ() + margin, Math.min(border.getMaxZ() - margin, entity.getZ())));
             entity.setDeltaMovement(bounceX ? -movement.x * 0.8 : movement.x,
                 movement.y * 0.9, bounceZ ? -movement.z * 0.8 : movement.z);
             entity.hurtMarked = true;

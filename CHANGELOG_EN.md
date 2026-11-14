@@ -2,6 +2,18 @@
 
 Every project change is recorded here, including release preparation.
 
+## 0.3.1 — November 14, 2026
+
+### Changes
+
+- Every projectile entity now bounces off the world border, including arrows, tridents, fireworks, snowballs, eggs, potions, Ender Pearls, fireballs, wind charges, fishing bobbers and mob projectiles.
+- Border reflection accounts for movement direction and entity width, placing the projectile back inside the border to prevent edge jitter.
+
+### Fixes
+
+- Withers can once again be summoned using either Soul Sand or Soul Soil. An independent full-structure check now protects spawning from a broken base-block tag.
+- A defeated Wither creates a strength-10 environment-breaking blast before the Nether Star is dropped, keeping the reward safe from the explosion.
+
 ## 0.3.0 — November 14, 2026
 
 ### Additions
