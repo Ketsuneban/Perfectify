@@ -1,5 +1,22 @@
 [
   {
+    "tag_name": "v0.3.1",
+    "name": "Yeta v0.3.1",
+    "body": "",
+    "prerelease": true,
+    "published_at": "2026-11-14T11:01:37Z",
+    "created_at": "2026-11-14T10:59:29Z",
+    "html_url": "https://github.com/Ketsuneban/Yeta/releases/tag/v0.3.1",
+    "assets": [
+      {
+        "name": "yeta-0.3.1.jar",
+        "size": 213329,
+        "download_count": 0,
+        "browser_download_url": "https://github.com/Ketsuneban/Yeta/releases/download/v0.3.1/yeta-0.3.1.jar"
+      }
+    ]
+  },
+  {
     "tag_name": "v0.3.0",
     "name": "Yeta v0.3.0",
     "body": "",
