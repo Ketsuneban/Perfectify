@@ -1,6 +1,6 @@
 {
   "name": "vectora-svg-desktop",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "description": "Vectora SVG standalone vector graphics editor for Windows",
   "main": "electron/main.cjs",
