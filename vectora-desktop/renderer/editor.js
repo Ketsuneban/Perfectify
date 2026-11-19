@@ -746,17 +746,8 @@ function handleResizeStart(ev){
 function handleResizeMove(ev){
  if(!resizeGesture||resizeGesture.id!==ev.pointerId)return;
  try{
-  var st=resizeGesture.state,corner=resizeGesture.corner,anchor=resizeGesture.anchor;
-  var p=point(ev,art);
-  var wDir=corner.includes("e")?st.width:-st.width;
-  var hDir=corner.includes("s")?st.height:-st.height;
-  var projected=((p.x-anchor.x)*wDir+(p.y-anchor.y)*hDir)/(st.width*st.width+st.height*st.height);
-  var scale=clamp(projected,st.baseScale*.05,st.baseScale*10);
-  var next=Object.assign({},st,{
-   scale:scale,
-   x:anchor.x-(corner.includes("w")?st.width*scale:0),
-   y:anchor.y-(corner.includes("n")?st.height*scale:0)
-  });
+  var next=DesktopTransform.resizeFromCorner(
+    resizeGesture.state,resizeGesture.corner,point(ev,art));
   applyOverlayTransform(resizeGesture.group,next);
  }catch(e){fail(e);}
  ev.stopPropagation();ev.preventDefault();
