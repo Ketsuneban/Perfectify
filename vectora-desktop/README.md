@@ -1,6 +1,6 @@
 # Vectora SVG Desktop
 
-**Windows 10/11 x64 · v0.5.0 preview · самостоятельный SVG-редактор для ПК**
+**Windows 10/11 x64 · v0.5.1 preview · самостоятельный SVG-редактор для ПК**
 
 Отдельное настольное приложение: без Android, ibisPaint X, сторонних браузеров, обязательной регистрации или доступа к интернету.
 
@@ -32,10 +32,10 @@
 
 ## Установка Windows
 
-GitHub Release: vectora-desktop-v0.5.0 — после успешной сборки CI.
+GitHub Release: vectora-desktop-v0.5.1 — после успешной сборки CI.
 
-- Vectora-SVG-Portable-0.5.0-x64.exe — запуск без установки.
-- Vectora-SVG-Setup-0.5.0-x64.exe — обычная установка в Windows.
+- Vectora-SVG-Portable-0.5.1-x64.exe — запуск без установки.
+- Vectora-SVG-Setup-0.5.1-x64.exe — обычная установка в Windows.
 
 Файлы неподписанные (preview), Windows SmartScreen может предупреждать. Держи резервные копии важных работ.
 
