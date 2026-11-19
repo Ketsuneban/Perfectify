@@ -85,6 +85,7 @@ output{color:#a1dcd6;min-width:22px;text-align:right;font-size:11px}
 <input id="overlayFileInput" type="file" accept=".svg,image/svg+xml" hidden>
 <!-- VECTOR_FILL_SCRIPT -->
 <!-- VECTOR_OVERLAY_SCRIPT -->
+<!-- VECTOR_LAYERS_SCRIPT -->
 <script>
 (function(){"use strict";
 var ns="http://www.w3.org/2000/svg";
@@ -179,8 +180,12 @@ function loadSvg(xml,reset){
  try{
   var parsed=sanitize(xml);
   board.replaceChild(parsed,art);art=parsed;maskId=null;contentGroup=null;
-  var g=art.querySelector('[data-vectora-content="true"]');
+  var g=Array.from(art.children).find(function(n){return n.getAttribute("data-vectora-content")==="true";});
   if(g){contentGroup=g;maskId=g.getAttribute("data-mask-id");}
+  // Upgrade saved v0.4.0 documents: remove overlays from the old masked base.
+  if(!window.VectorLayers)throw Error("Модуль слоёв не загружен");
+  VectorLayers.repair(art,contentGroup);
+  if(Array.from(art.children).some(VectorLayers.isOverlay))ensureBaseLayer();
   clearSelection();drag=null;draw=null;overlayTouches.clear();overlayGesture=null;overlayDrag=null;
   if(reset!==false){undo=[];redo=[];}
   notify("SVG загружен. Редактирование остаётся векторным.");
@@ -215,6 +220,13 @@ function point(ev,element){
 }
 function fmt(p){return p.x.toFixed(2)+" "+p.y.toFixed(2);}
 function container(){return contentGroup&&contentGroup.isConnected?contentGroup:art;}
+function ensureBaseLayer(){
+ if(!window.VectorLayers)throw Error("Модуль слоёв не загружен");
+ contentGroup=VectorLayers.ensureBase(art,contentGroup,function(){
+  return document.createElementNS(ns,"g");
+ });
+ return contentGroup;
+}
 function newId(prefix){var i=0,id=prefix;while(document.getElementById(id))id=prefix+"-"+(++i);return id;}
 function overlayState(el){
  var state={
@@ -306,8 +318,10 @@ function importOverlaySvg(source){
   group.appendChild(imported);
   var previousRedo=redo.slice();
   remember();
+  ensureBaseLayer();
   applyOverlayTransform(group,initial);
-  container().appendChild(group);
+  art.appendChild(group); // Imported SVG is never a child of the masked base layer.
+  VectorLayers.repair(art,contentGroup);
   var output=snapshot();
   if(output.length>8388608){
    group.remove();undo.pop();redo=previousRedo;
@@ -319,8 +333,11 @@ function importOverlaySvg(source){
  }catch(e){fail(e);}
 }
 function eraseMask(){
- if(contentGroup&&contentGroup.isConnected&&maskId){
-  var item=art.querySelector("mask#"+maskId);if(item)return item;
+ // Erasing affects only the base drawing, and cannot cut through imported SVG.
+ var base=ensureBaseLayer();
+ if(maskId){
+  var existing=Array.from(art.querySelectorAll("mask")).find(function(e){return e.id===maskId;});
+  if(existing){VectorLayers.repair(art,base);return existing;}
  }
  var defs=Array.from(art.children).find(function(el){return el.localName==="defs";});
  if(!defs){defs=document.createElementNS(ns,"defs");art.insertBefore(defs,art.firstChild);}
@@ -332,11 +349,9 @@ function eraseMask(){
  var white=document.createElementNS(ns,"rect");
  ["x","y","width","height"].forEach(function(k){white.setAttribute(k,v[k]);});
  white.setAttribute("fill","#fff");mask.appendChild(white);defs.appendChild(mask);
- var group=document.createElementNS(ns,"g");group.setAttribute("data-vectora-content","true");
- group.setAttribute("data-mask-id",maskId);
- group.setAttribute("mask","url(#"+maskId+")");
- Array.from(art.children).forEach(function(el){if(el!==defs)group.appendChild(el);});
- art.appendChild(group);contentGroup=group;
+ base.setAttribute("data-mask-id",maskId);
+ base.setAttribute("mask","url(#"+maskId+")");
+ VectorLayers.repair(art,base);
  return mask;
 }
 function startInk(ev){
