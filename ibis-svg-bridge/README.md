@@ -18,8 +18,8 @@
 - It does not turn the official ibisPaint canvas into an SVG editor.
 - PNG imported into ibisPaint is rasterized, not an SVG vector layer.
 - ibisPaint drawing changes are **not** synchronized back into SVG.
-- For safety and scope, it intentionally strips active content (scripts, event handlers, embedded remote resources, foreignObject, stylesheets, unsupported SVG elements and effects). Some complicated SVG assets will appear different.
-- It does not support full Bezier control-point editing or complete SVG 2.
+- For safety and scope, it intentionally strips active content (scripts, event handlers, embedded remote resources, foreignObject, external stylesheets and unsupported SVG elements). Some complicated SVG assets will appear different.
+- Common inline gradients, masks and local SVG filter primitives are preserved where supported by Android WebView; some complex effects may still render differently.\n- It does not support full Bezier control-point editing or complete SVG 2.
 - Floating windows and Android background-activity limits vary by device.
 
 ## How to use
