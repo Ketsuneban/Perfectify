@@ -1,4 +1,4 @@
-# SVG Bridge for ibisPaint X — Android (MVP)
+# SVG Bridge for ibisPaint X — Android (v0.2.0 preview)
 
 **Status: experimental source implementation.** This is **not** an official ibisPaint plugin and does **not** patch, replace, or inject into ibisPaint. It is a separate Android app that draws a floating SVG editor **over** ibisPaint X with the standard `SYSTEM_ALERT_WINDOW` permission.
 
@@ -6,7 +6,7 @@
 
 - Open a local SVG via Android's system file picker or `Share` / `Open with`.
 - Inspect and move basic SVG shapes by touch in a floating window.
-- Create rectangles, circles, lines, text, and basic editable paths.
+- **Freehand drawing** with a touch/stylus brush (vector paths, adjustable color, opacity and thickness).\n- **Fill tool** for recoloring an SVG object or adding a colored background vector rectangle; **not** a flood-fill of arbitrary pixel regions.\n- **Eraser** using SVG luminance masking, preserving original vector objects.\n- Create rectangles, circles, lines, text, and basic editable paths.
 - Edit fill, stroke, stroke width, selected text, and a path's `d` attribute.
 - Undo / redo up to 30 snapshots.
 - Save the edited file as **SVG** using Android's system save dialog.
@@ -20,7 +20,7 @@
 - PNG imported into ibisPaint is rasterized, not an SVG vector layer.
 - ibisPaint drawing changes are **not** synchronized back into SVG.
 - For safety and scope, it intentionally strips active content (scripts, event handlers, embedded remote resources, foreignObject, external stylesheets and unsupported SVG elements). Some complicated SVG assets will appear different.
-- Common inline gradients, masks and local SVG filter primitives are preserved where supported by Android WebView; some complex effects may still render differently.\n- It does not support full Bezier control-point editing or complete SVG 2.
+- Common inline gradients, masks and local SVG filter primitives are preserved where supported by Android WebView; some complex effects may still render differently.\n- The bucket currently fills a tapped SVG object or background, rather than flood-filling arbitrary enclosed pixel spaces.\n- The eraser records black strokes into an SVG mask; it does not geometrically subtract paths.\n- It does not support full Bezier control-point editing or complete SVG 2.
 - Floating windows and Android background-activity limits vary by device.
 
 ## How to use
@@ -37,7 +37,7 @@
 
 Download `app/src/main/assets/editor.html` from this branch and open it in a recent desktop or Android browser. The editor can open SVG, modify shapes and paths, and download SVG/PNG without an Android application. Browser mode cannot display on top of ibisPaint or share to it directly; import the exported PNG manually.
 
-## Build from source
+## GitHub APK release\n\nThe GitHub Actions workflow builds a debug APK, uploads it as a build artifact, and publishes a prerelease named `ibis-svg-bridge-v0.2.0` on a **successful push build** from the feature branch. The APK is debug-signed, intended for testing, not Google Play distribution.\n\n## Build from source
 
 Requirements: Android SDK platform 35, JDK 17, Gradle 8.9 and Android Gradle Plugin 8.7.3.
 
