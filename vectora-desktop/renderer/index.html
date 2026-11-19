@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Vectora SVG · Desktop</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+<header class="header">
+  <div class="brand">
+    <div class="logo" aria-hidden="true"><span>V</span></div>
+    <div><strong>Vectora <span>SVG</span></strong><small>Векторная графика</small></div>
+  </div>
+  <div class="header-divider"></div>
+  <div class="project-name"><span class="project-dot"></span><span id="documentTitle">Без названия.svg</span><span class="project-type">SVG</span></div>
+  <div class="header-actions">
+    <button id="newDoc" title="Создать новый документ">Новый</button>
+    <button id="openDoc" title="Открыть SVG (Ctrl+O)">Открыть</button>
+    <button id="overlayDoc" class="btn-accent" title="Наложить SVG (Ctrl+Shift+O)">⊕ Импорт SVG</button>
+    <div class="header-divider"></div>
+    <button id="exportPng" title="Экспортировать PNG">Экспорт PNG</button>
+    <button id="saveDoc" class="btn-primary" title="Сохранить векторный SVG (Ctrl+S)">Сохранить SVG</button>
+  </div>
+</header>
+<div class="body-grid">
+  <aside class="tools-panel">
+    <p class="vertical-label">ИНСТРУМЕНТЫ</p>
+    <div class="tool-list">
+      <button id="selectTool" class="tool active" title="Выделение и перемещение (V)"><span>↖</span> <em>Выбор</em><kbd>V</kbd></button>
+      <button id="brushTool" class="tool" title="Векторная кисть (B)"><span>✎</span> <em>Кисть</em><kbd>B</kbd></button>
+      <button id="bucketTool" class="tool" title="Заливка области (G)"><span>◩</span> <em>Заливка</em><kbd>G</kbd></button>
+      <button id="eyedropTool" class="tool" title="Пипетка (I)"><span>◉</span> <em>Пипетка</em><kbd>I</kbd></button>
+      <button id="eraserTool" class="tool" title="Ластик для основы (E)"><span>⌫</span> <em>Ластик</em><kbd>E</kbd></button>
+    </div>
+    <div class="tool-divider"></div>
+    <p class="vertical-label">ФИГУРЫ</p>
+    <div class="tool-list">
+      <button id="rectTool" class="tool" title="Добавить прямоугольник (R)"><span>▭</span><em>Прямоугольник</em><kbd>R</kbd></button>
+      <button id="ellipseTool" class="tool" title="Добавить эллипс (O)"><span>◯</span><em>Эллипс</em><kbd>O</kbd></button>
+      <button id="lineTool" class="tool" title="Добавить линию (L)"><span>╱</span><em>Линия</em><kbd>L</kbd></button>
+      <button id="textTool" class="tool" title="Добавить текст (T)"><span>T</span><em>Текст</em><kbd>T</kbd></button>
+    </div>
+    <div class="tool-divider"></div>
+    <div class="tool-list">
+      <button id="undoTool" class="tool" title="Отменить (Ctrl+Z)"><span>↶</span><em>Отменить</em><kbd>⌃Z</kbd></button>
+      <button id="redoTool" class="tool" title="Повторить (Ctrl+Y)"><span>↷</span><em>Повторить</em><kbd>⌃Y</kbd></button>
+    </div>
+    <div class="sidebar-tip"><span>⌕</span> Колесо мыши — масштаб холста. Пробел + перетаскивание — перемещение.</div>
+  </aside>
+  <div id="work-area">
+    <div class="canvas-header">
+      <div class="crumb">РАБОЧАЯ ОБЛАСТЬ <span class="crumb-sep">/</span> <span id="canvasDimensions">1024 × 768</span></div>
+      <div class="canvas-controls">
+        <button id="fitCanvas" title="Вписать в окно (F)">Вписать</button>
+        <button id="centerCanvas" title="Центрировать холст">Центр</button>
+        <span class="canvas-hint">Средняя кнопка или Пробел + мышь — панорама</span>
+      </div>
+    </div>
+    <div id="canvasViewport">
+      <div class="canvas-noise"></div>
+      <div id="board" role="application" aria-label="Векторный холст SVG">
+        <svg id="art" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 768" width="1024" height="768"></svg>
+      </div>
+      <div id="selectionFrame" hidden>
+        <span class="outline-tag">SVG</span>
+        <button class="transform-handle nw" data-corner="nw" aria-label="Масштабировать из верхнего левого угла"></button>
+        <button class="transform-handle ne" data-corner="ne" aria-label="Масштабировать из верхнего правого угла"></button>
+        <button class="transform-handle sw" data-corner="sw" aria-label="Масштабировать из нижнего левого угла"></button>
+        <button class="transform-handle se" data-corner="se" aria-label="Масштабировать из нижнего правого угла"></button>
+      </div>
+      <div id="busy" hidden>Обработка SVG…</div>
+      <div id="dropHint" hidden><div>⊕<strong>Наложить SVG</strong><small>Отпусти файл здесь для векторного импорта</small></div></div>
+    </div>
+    <div class="canvas-footer">
+      <div class="footer-left"><span class="green-dot"></span><span id="status">Готово. Импортируй SVG или начни рисовать.</span></div>
+      <div class="zoom-controls">
+        <button id="zoomOut" title="Уменьшить масштаб">−</button>
+        <input id="zoomSlider" type="range" min="5" max="400" value="100" aria-label="Масштаб холста">
+        <button id="zoomIn" title="Увеличить масштаб">+</button>
+        <output id="zoomLabel">100%</output>
+      </div>
+    </div>
+  </div>
+  <aside class="inspector">
+    <div class="inspector-title"><span>ПАРАМЕТРЫ</span><span class="mini-mark">◎</span></div>
+    <div class="panel-section">
+      <h3>Цвет и кисть</h3>
+      <div class="color-entry">
+        <input id="paintColor" type="color" value="#388cd2" aria-label="Выбрать цвет">
+        <div class="field-col"><label for="hexInput">ЦВЕТ · HEX / RGBA</label><input id="hexInput" type="text" value="#388CD2" maxlength="9" spellcheck="false"></div>
+      </div>
+      <div class="swatch-section"><span class="field-caption">БЫСТРАЯ ПАЛИТРА</span><div id="swatches" class="swatches"></div></div>
+      <div class="range-field"><label for="alphaInput">Непрозрачность</label><div><input id="alphaInput" type="range" min="0" max="100" value="100"><output id="alphaOut">100%</output></div></div>
+      <div class="range-field"><label for="sizeInput">Размер кисти</label><div><input id="sizeInput" type="range" min="1" max="110" value="12"><output id="sizeOut">12</output></div></div>
+      <div class="range-field"><label for="toleranceInput">Допуск заливки</label><div><input id="toleranceInput" type="range" min="0" max="65" value="20"><output id="toleranceOut">20</output></div></div>
+    </div>
+    <div class="panel-section selection-section">
+      <h3>Выделение</h3>
+      <div id="selectedPlaceholder" class="muted-hint">Выдели элемент или импортированный SVG, чтобы настроить его.</div>
+      <div id="selectedPanel" hidden>
+        <div class="selected-header"><span id="selectedName">Элемент</span><button id="deleteShape" class="small-danger" title="Удалить объект">✕</button></div>
+        <div class="field-row"><button id="applyColor">Применить цвет</button><input id="textValue" type="text" maxlength="250" hidden placeholder="Изменить текст"></div>
+        <div id="overlayControls" hidden>
+          <div class="subhead">ТРАНСФОРМАЦИЯ SVG <span>🔒 Пропорции</span></div>
+          <div class="transform-grid">
+            <div><label for="overlayX">Положение X</label><input id="overlayX" type="number" step="1" value="0"></div>
+            <div><label for="overlayY">Положение Y</label><input id="overlayY" type="number" step="1" value="0"></div>
+            <div><label for="overlayWidth">Ширина</label><input id="overlayWidth" type="number" min="1" step="1" value="100"></div>
+            <div><label for="overlayHeight">Высота</label><input id="overlayHeight" type="number" min="1" step="1" value="100"></div>
+          </div>
+          <div class="percent-control">
+            <label for="overlayPercent">Масштаб, %</label>
+            <input id="overlayPercent" type="number" min="5" max="1000" step="1" value="100">
+            <button id="resetTransform" title="Исходный масштаб">100%</button>
+          </div>
+          <div class="scale-row"><button id="scaleDown" title="Уменьшить SVG">−</button><input id="overlayScale" type="range" min="5" max="1000" value="100"><button id="scaleUp" title="Увеличить SVG">+</button><output id="overlayScaleValue">100%</output></div>
+          <div class="trans-help">Маркеры рамки масштабируют всю группу без искажений. Shift не требуется.</div>
+        </div>
+      </div>
+    </div>
+    <div class="layers-head"><h3>Слои</h3><span id="layersCount">0</span></div>
+    <div id="layersList" class="layers-list"></div>
+    <div class="layers-bottom"><button id="raiseLayer" title="Переместить импортированный SVG выше">↑ Выше</button><button id="lowerLayer" title="Переместить импортированный SVG ниже">↓ Ниже</button></div>
+    <div class="inspector-bottom"><span>VECTOR ENGINE · SVG</span><span>v0.5.0</span></div>
+  </aside>
+</div>
+</div>
+<input id="fileInput" type="file" accept=".svg,image/svg+xml" hidden>
+<input id="overlayFileInput" type="file" accept=".svg,image/svg+xml" hidden>
+<script src="../vendor/vector-fill.js"></script>
+<script src="../vendor/vector-overlay.js"></script>
+<script src="../vendor/vector-layers.js"></script>
+<script src="editor.js"></script>
+</body>
+</html>
