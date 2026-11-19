@@ -67,8 +67,10 @@ public final class MainActivity extends Activity {
             String html = readAsset("editor.html");
             String fillLibrary = readAsset("vector-fill.js");
             String overlayLibrary = readAsset("vector-overlay.js");
+            String layersLibrary = readAsset("vector-layers.js");
             html = html.replace("<!-- VECTOR_FILL_SCRIPT -->", "<script>\n" + fillLibrary + "\n</script>");
             html = html.replace("<!-- VECTOR_OVERLAY_SCRIPT -->", "<script>\n" + overlayLibrary + "\n</script>");
+            html = html.replace("<!-- VECTOR_LAYERS_SCRIPT -->", "<script>\n" + layersLibrary + "\n</script>");
             web.loadDataWithBaseURL("https://appassets.androidplatform.net/",
                     html, "text/html", "UTF-8", null);
         } catch (IOException e) {
