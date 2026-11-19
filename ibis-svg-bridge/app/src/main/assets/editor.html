@@ -1,0 +1,670 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Vectora SVG</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,Roboto,"Segoe UI",sans-serif;--bg:#0d1420;--panel:#172334;--edge:#31445c;--muted:#99aabe;--accent:#5ccbbf}
+*{box-sizing:border-box}html,body{height:100%;margin:0;background:var(--bg);color:#eef5fb}body{overflow:hidden}
+#app{display:flex;flex-direction:column;height:100%;height:100dvh;min-height:0}
+.top{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;background:#151f2d;border-bottom:1px solid var(--edge)}
+.brand{display:flex;flex-direction:column;min-width:0}.brand strong{font-size:18px;letter-spacing:.4px}.brand span{font-size:10px;color:#99adbe}
+.top-actions{display:flex;gap:6px;min-width:0;overflow-x:auto}.top-actions button{background:#28394b}
+button{appearance:none;border:1px solid #405671;background:#213246;color:#f7fcff;border-radius:10px;padding:10px 11px;font-size:12px;font-weight:650;white-space:nowrap;cursor:pointer;min-height:38px}
+button:active{background:#476780}button.active{background:#126f70;color:white;border-color:#68dcd1}
+button.primary{background:#187b6f;border-color:#36b5a7}button.negative{background:#663444;border-color:#a35670}
+.tool-strip{display:flex;gap:7px;align-items:center;padding:8px 10px;overflow-x:auto;flex:0 0 auto;border-bottom:1px solid var(--edge);scrollbar-width:none;background:#121e2d}
+.tool-strip::-webkit-scrollbar,.top-actions::-webkit-scrollbar{display:none}
+.tool-strip button{font-size:12px;padding:9px 12px}
+#workspace{flex:1;min-height:0;display:flex;position:relative;align-items:stretch;background:#08111e;padding:9px}
+#board{position:relative;flex:1;min-width:0;min-height:0;display:flex;justify-content:center;align-items:center;overflow:hidden;border:1px solid #374c66;border-radius:12px;background-color:#efeff0;background-image:linear-gradient(45deg,#dadde1 25%,transparent 25%),linear-gradient(-45deg,#dadde1 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#dadde1 75%),linear-gradient(-45deg,transparent 75%,#dadde1 75%);background-size:24px 24px;background-position:0 0,0 12px,12px -12px,-12px 0}
+#art{width:100%;height:100%;display:block;touch-action:none;user-select:none;-webkit-user-select:none}
+[data-picked="true"]{filter:drop-shadow(0 0 3px #28bcff)}
+#busy{position:absolute;top:12px;right:12px;color:#fff;background:#182b44e9;padding:9px 13px;border-radius:9px;z-index:4;pointer-events:none}
+[hidden]{display:none!important}
+.bottom{background:#152131;border-top:1px solid var(--edge);padding:9px 10px 7px;flex:0 0 auto}
+.properties{display:flex;align-items:center;flex-wrap:wrap;gap:9px 12px}
+.setting{display:flex;align-items:center;gap:5px;min-height:37px}
+.setting label{color:#acbdce;font-size:11px;white-space:nowrap}
+input{border:1px solid #4d617a;border-radius:7px;background:#243448;color:white;font-size:13px;min-height:33px}
+input[type="color"]{width:46px;height:36px;padding:2px;min-width:46px}
+input[type="text"]{width:95px;padding:6px 8px}
+input[type="range"]{width:93px;accent-color:#55cbbc}
+output{color:#a1dcd6;min-width:22px;text-align:right;font-size:11px}
+.swatches{display:flex;gap:8px;align-items:center;overflow-x:auto;padding-top:9px}
+.swatch{width:27px;height:27px;border-radius:50%;border:2px solid #ccd9e5;flex:0 0 27px;padding:0;min-height:27px}
+#selectedPanel{display:flex;align-items:center;gap:8px;overflow-x:auto;padding-top:8px}
+#selectedPanel span{color:#c4d2dd;font-size:12px;white-space:nowrap}
+#textValue{width:120px;max-width:30vw}
+#overlayControls{display:flex;align-items:center;gap:7px;flex:0 0 auto;min-width:0}
+#overlayScale{width:134px;min-width:75px}
+#overlayScaleValue{min-width:38px}
+#overlayControls button{min-height:31px;padding:6px 9px}
+@media(max-width:520px){#overlayScale{width:80px}}
+#status{font-size:11px;line-height:1.3;color:#9db3c6;padding-top:8px;min-height:21px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:520px){.brand span{display:none}.brand strong{font-size:16px}.top-actions button{padding:8px}.properties{gap:5px 10px}.bottom{padding:6px 9px}input[type=range]{width:80px}}
+@media(max-height:570px){.top{padding:4px 8px}.tool-strip{padding:4px}.bottom{padding:4px 8px}.swatches{padding-top:4px}#selectedPanel{padding-top:3px}}
+</style></head>
+<body><div id="app">
+<header class="top"><div class="brand"><strong>◈ Vectora</strong><span>Векторный SVG-редактор · автономно</span></div>
+<div class="top-actions">
+<button id="newDoc">Новый</button>
+<button id="openDoc">Открыть</button>
+<button id="overlayDoc" class="primary" title="Добавить второй SVG поверх текущего">⊕ Наложить SVG</button>
+<button id="saveDoc" class="primary">SVG ↓</button>
+<button id="exportPng">PNG ↓</button>
+</div></header>
+<nav class="tool-strip" aria-label="Инструменты">
+<button id="selectTool" class="active">↖ Выбор</button>
+<button id="brushTool">✎ Кисть</button>
+<button id="bucketTool">▧ Заливка</button>
+<button id="eyedropTool">◉ Пипетка</button>
+<button id="eraserTool">⌫ Ластик</button>
+<button id="rectTool">▭ Прямоуг.</button>
+<button id="ellipseTool">○ Эллипс</button>
+<button id="lineTool">╱ Линия</button>
+<button id="textTool">T Текст</button>
+<button id="undoTool">↶</button>
+<button id="redoTool">↷</button>
+</nav>
+<main id="workspace"><div id="board">
+<svg id="art" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 768" width="1024" height="768"></svg>
+<div id="busy" hidden>Векторизация области…</div></div></main>
+<section class="bottom">
+<div class="properties">
+<div class="setting"><label for="paintColor">Цвет</label><input id="paintColor" type="color" value="#388cd2"></div>
+<div class="setting"><label for="hexInput">HEX</label><input id="hexInput" type="text" value="#388CD2" maxlength="9" spellcheck="false"></div>
+<div class="setting"><label for="alphaInput">Альфа</label><input id="alphaInput" type="range" min="0" max="100" value="100"><output id="alphaOut">100%</output></div>
+<div class="setting"><label for="sizeInput">Размер</label><input id="sizeInput" type="range" min="1" max="110" value="12"><output id="sizeOut">12</output></div>
+<div class="setting"><label for="toleranceInput">Допуск</label><input id="toleranceInput" type="range" min="0" max="65" value="20"><output id="toleranceOut">20</output></div>
+</div>
+<div class="swatches" id="swatches" aria-label="Палитра"></div>
+<div id="selectedPanel" hidden><span id="selectedName">Фигура</span><button id="applyColor">Покрасить</button><input id="textValue" type="text" maxlength="250" hidden placeholder="Текст"><div id="overlayControls" hidden><span>Масштаб</span><button id="scaleDown" title="Уменьшить пропорционально">−</button><input id="overlayScale" type="range" min="5" max="1000" step="1" value="100" aria-label="Пропорциональный масштаб SVG"><output id="overlayScaleValue">100%</output><button id="scaleUp" title="Увеличить пропорционально">+</button></div><button id="deleteShape" class="negative">Удалить</button></div>
+<div id="status" role="status">Выбери кисть и рисуй. Все новые линии остаются векторами.</div>
+</section></div>
+<input id="fileInput" type="file" accept=".svg,image/svg+xml" hidden>
+<input id="overlayFileInput" type="file" accept=".svg,image/svg+xml" hidden>
+<!-- VECTOR_FILL_SCRIPT -->
+<!-- VECTOR_OVERLAY_SCRIPT -->
+<!-- VECTOR_LAYERS_SCRIPT -->
+<script>
+(function(){"use strict";
+var ns="http://www.w3.org/2000/svg";
+var $=function(id){return document.getElementById(id);};
+var board=$("board"),art=$("art"),selected=null,drag=null,draw=null,mode="select",working=false;
+var undo=[],redo=[],maskId=null,contentGroup=null;
+var overlayTouches=new Map(),overlayGesture=null,overlayDrag=null;
+var ids={select:"selectTool",brush:"brushTool",bucket:"bucketTool",eyedrop:"eyedropTool",eraser:"eraserTool"};
+var allowedTags=new Set(["svg","g","defs","rect","circle","ellipse","line","polyline","polygon","path","text","tspan","linearGradient","radialGradient","stop","clipPath","mask","use","symbol","pattern","filter","feGaussianBlur","feOffset","feBlend","feComposite","feFlood","feColorMatrix","feMerge","feMergeNode","feComponentTransfer","feFuncR","feFuncG","feFuncB","feFuncA","feDropShadow"]);
+var allowedAttrs=new Set(["id","viewBox","width","height","x","y","x1","y1","x2","y2","cx","cy","r","rx","ry","d","points","transform","fill","fill-rule","fill-opacity","stroke","stroke-width","stroke-opacity","stroke-linecap","stroke-linejoin","stroke-dasharray","stroke-dashoffset","opacity","font-size","font-weight","font-family","text-anchor","dominant-baseline","offset","stop-color","stop-opacity","gradientUnits","gradientTransform","spreadMethod","clip-path","mask","href","preserveAspectRatio","display","color","vector-effect","role","filter","filterUnits","primitiveUnits","stdDeviation","dx","dy","in","in2","result","values","type","mode","operator","k1","k2","k3","k4","slope","intercept","amplitude","exponent","tableValues","flood-color","flood-opacity","patternUnits","patternContentUnits","patternTransform","refX","refY","maskUnits","maskContentUnits","data-vectora-content","data-mask-id","data-vectora-background","data-vectora-overlay","data-vectora-x","data-vectora-y","data-vectora-scale","data-vectora-base-scale","data-vectora-width","data-vectora-height"]);
+var styleProps=new Set(["fill","fill-opacity","fill-rule","stroke","stroke-width","stroke-opacity","stroke-linecap","stroke-linejoin","opacity","font-size","font-family","font-weight","text-anchor","stop-color","stop-opacity","display","filter"]);
+var editTags=new Set(["rect","circle","ellipse","line","polyline","polygon","path","text","use"]);
+function notify(s){$("status").textContent=s;}
+function fail(e){notify("Ошибка: "+(e&&e.message?e.message:e));}
+function clamp(v,a,b){return Math.min(b,Math.max(a,v));}
+function safeValue(value){
+ if(/javascript:|data:|@import|expression\s*\(|[<>]/i.test(value))return false;
+ var urls=value.match(/url\s*\([^)]*\)/gi)||[];
+ return urls.every(function(u){return /^url\s*\(\s*['"]?#[a-zA-Z0-9_.:-]+['"]?\s*\)$/i.test(u);});
+}
+function sanitize(xml){
+ if(typeof xml!=="string"||xml.length>8388608)throw Error("SVG больше 8 МиБ");
+ if(/<!DOCTYPE|<!ENTITY/i.test(xml))throw Error("DTD запрещены");
+ var doc=new DOMParser().parseFromString(xml,"image/svg+xml");
+ var root=doc.documentElement;
+ if(doc.querySelector("parsererror")||!root||root.localName!=="svg"||root.namespaceURI!==ns)throw Error("Неверный SVG");
+ var count=0;
+ function walk(el){
+  if(++count>12000)throw Error("Слишком много SVG-объектов");
+  Array.from(el.attributes).forEach(function(a){
+   var name=a.name,local=a.localName,value=a.value;
+   if(name==="xmlns"||name==="xmlns:xlink")return;
+   if(name==="style"){
+    var safe=value.split(";").map(function(part){
+     var i=part.indexOf(":");if(i<1)return "";
+     var k=part.slice(0,i).trim().toLowerCase(),v=part.slice(i+1).trim();
+     return styleProps.has(k)&&safeValue(v)?k+":"+v:"";
+    }).filter(Boolean).join(";");
+    if(safe)el.setAttribute("style",safe);else el.removeAttribute("style");
+   }else if(!allowedAttrs.has(local)||!safeValue(value)||(local==="href"&&!/^#[a-zA-Z0-9_.:-]+$/.test(value)))el.removeAttribute(name);
+  });
+  Array.from(el.children).forEach(function(child){
+   if(child.namespaceURI!==ns||!allowedTags.has(child.localName)){child.remove();return;}
+   walk(child);
+  });
+ }
+ walk(root);
+ var result=document.importNode(root,true);
+ result.setAttribute("id","art");
+ if(!result.hasAttribute("viewBox")){
+  var w=parseFloat(result.getAttribute("width"))||1024,h=parseFloat(result.getAttribute("height"))||768;
+  result.setAttribute("viewBox","0 0 "+Math.max(1,w)+" "+Math.max(1,h));
+ }
+ var v=result.viewBox.baseVal;
+ if(!v.width||!v.height||v.width>1000000||v.height>1000000)throw Error("Некорректная область SVG");
+ return result;
+}
+function snapshot(){
+ var clone=art.cloneNode(true);
+ clone.querySelectorAll("[data-picked]").forEach(function(n){n.removeAttribute("data-picked");});
+ clone.removeAttribute("data-picked");
+ clone.setAttribute("xmlns",ns);
+ return new XMLSerializer().serializeToString(clone);
+}
+var saveTimer=null;
+function persist(){
+ if(saveTimer)clearTimeout(saveTimer);
+ saveTimer=setTimeout(function(){
+  try{var data=snapshot();if(window.AndroidBridge)AndroidBridge.autosave(data);}catch(e){fail(e);}
+ },190);
+}
+function remember(){undo.push(snapshot());if(undo.length>30)undo.shift();redo=[];}
+function clearSelection(){
+ if(selected&&selected.isConnected)selected.removeAttribute("data-picked");
+ selected=null;$("selectedPanel").hidden=true;$("textValue").hidden=true;
+ $("overlayControls").hidden=true;$("applyColor").hidden=false;
+}
+function pick(el){
+ clearSelection();
+ if(!el)return;
+ selected=el;selected.setAttribute("data-picked","true");
+ $("selectedPanel").hidden=false;
+ var isOverlay=el.getAttribute("data-vectora-overlay")==="true";
+ $("selectedName").textContent=isOverlay?"Наложенный SVG":"Выбрано: "+el.localName;
+ $("overlayControls").hidden=!isOverlay;
+ $("applyColor").hidden=isOverlay;
+ if(isOverlay)updateOverlayScaleUi(el);
+ $("textValue").hidden=el.localName!=="text";
+ if(el.localName==="text")$("textValue").value=el.textContent;
+}
+function loadSvg(xml,reset){
+ try{
+  var parsed=sanitize(xml);
+  board.replaceChild(parsed,art);art=parsed;maskId=null;contentGroup=null;
+  var g=Array.from(art.children).find(function(n){return n.getAttribute("data-vectora-content")==="true";});
+  if(g){contentGroup=g;maskId=g.getAttribute("data-mask-id");}
+  // Upgrade saved v0.4.0 documents: remove overlays from the old masked base.
+  if(!window.VectorLayers)throw Error("Модуль слоёв не загружен");
+  VectorLayers.repair(art,contentGroup);
+  if(Array.from(art.children).some(VectorLayers.isOverlay))ensureBaseLayer();
+  clearSelection();drag=null;draw=null;overlayTouches.clear();overlayGesture=null;overlayDrag=null;
+  if(reset!==false){undo=[];redo=[];}
+  notify("SVG загружен. Редактирование остаётся векторным.");
+  persist();
+ }catch(e){fail(e);}
+}
+function newDoc(){
+ remember();loadSvg('<svg xmlns="'+ns+'" viewBox="0 0 1024 768" width="1024" height="768"></svg>',true);
+ notify("Создан новый векторный документ 1024 × 768");
+}
+function setTool(tool){
+ if(working)return;
+ mode=tool;
+ Object.keys(ids).forEach(function(k){$(ids[k]).classList.toggle("active",k===mode);});
+ var help={select:"Выбор: нажми на фигуру и перетаскивай.",brush:"Кисть: рисуй пальцем или стилусом; линии — SVG пути.",bucket:"Заливка: нажми внутри замкнутой области; результат — SVG контур.",eyedrop:"Пипетка: нажми на нужный цвет рисунка.",eraser:"Ластик: стирай пальцем; используется векторная маска."};
+ notify(help[mode]||"Инструмент готов");
+}
+function currentHex(){return $("paintColor").value.toLowerCase();}
+function currentAlpha(){return clamp(parseInt($("alphaInput").value,10)/100,0,1);}
+function setColor(hex,alpha){
+ if(!/^#[0-9a-fA-F]{6}$/.test(hex))throw Error("Используй цвет #RRGGBB");
+ $("paintColor").value=hex.toLowerCase();
+ $("hexInput").value=hex.toUpperCase();
+ if(alpha!==undefined)$("alphaInput").value=Math.round(clamp(alpha,0,1)*100);
+ $("alphaOut").textContent=$("alphaInput").value+"%";
+}
+function view(){var v=art.viewBox.baseVal;return{x:v.x,y:v.y,width:v.width,height:v.height};}
+function point(ev,element){
+ var p=art.createSVGPoint();p.x=ev.clientX;p.y=ev.clientY;
+ var matrix=(element||art).getScreenCTM();if(!matrix)throw Error("Ошибка координат");
+ return p.matrixTransform(matrix.inverse());
+}
+function fmt(p){return p.x.toFixed(2)+" "+p.y.toFixed(2);}
+function container(){return contentGroup&&contentGroup.isConnected?contentGroup:art;}
+function ensureBaseLayer(){
+ if(!window.VectorLayers)throw Error("Модуль слоёв не загружен");
+ contentGroup=VectorLayers.ensureBase(art,contentGroup,function(){
+  return document.createElementNS(ns,"g");
+ });
+ return contentGroup;
+}
+function newId(prefix){var i=0,id=prefix;while(document.getElementById(id))id=prefix+"-"+(++i);return id;}
+function overlayState(el){
+ var state={
+  x:Number(el.getAttribute("data-vectora-x")),
+  y:Number(el.getAttribute("data-vectora-y")),
+  scale:Number(el.getAttribute("data-vectora-scale")),
+  baseScale:Number(el.getAttribute("data-vectora-base-scale")),
+  width:Number(el.getAttribute("data-vectora-width")),
+  height:Number(el.getAttribute("data-vectora-height"))
+ };
+ if(!Number.isFinite(state.x)||!Number.isFinite(state.y)||
+    !Number.isFinite(state.scale)||state.scale<=0||
+    !Number.isFinite(state.baseScale)||state.baseScale<=0||
+    !Number.isFinite(state.width)||state.width<=0||
+    !Number.isFinite(state.height)||state.height<=0)throw Error("Некорректные размеры наложенного SVG");
+ return state;
+}
+function updateOverlayScaleUi(el){
+ var state=overlayState(el);
+ var pct=Math.round(state.scale/state.baseScale*100);
+ $("overlayScale").value=clamp(pct,5,1000);
+ $("overlayScaleValue").textContent=pct+"%";
+}
+function applyOverlayTransform(el,state){
+ if(!window.VectorOverlay)throw Error("Модуль масштабирования SVG недоступен");
+ if(!Number.isFinite(state.x)||!Number.isFinite(state.y)||
+    !Number.isFinite(state.scale)||state.scale<=0)throw Error("Некорректное преобразование");
+ el.setAttribute("data-vectora-x",state.x.toFixed(5));
+ el.setAttribute("data-vectora-y",state.y.toFixed(5));
+ el.setAttribute("data-vectora-scale",state.scale.toFixed(8));
+ el.setAttribute("data-vectora-base-scale",state.baseScale.toFixed(8));
+ el.setAttribute("data-vectora-width",state.width);
+ el.setAttribute("data-vectora-height",state.height);
+ el.setAttribute("transform",VectorOverlay.format(state));
+ if(selected===el)updateOverlayScaleUi(el);
+}
+function scaleOverlayBy(percent){
+ if(!selected||selected.getAttribute("data-vectora-overlay")!=="true")return;
+ if(!window.VectorOverlay)return;
+ try{
+  var old=overlayState(selected);
+  var desired=old.baseScale*clamp(percent,5,1000)/100;
+  var anchor={x:old.x+old.width*old.scale*.5,y:old.y+old.height*old.scale*.5};
+  var next=VectorOverlay.zoomAt(old,desired,anchor);
+  applyOverlayTransform(selected,next);persist();
+  notify("Масштаб SVG: "+Math.round(next.scale/next.baseScale*100)+"%, без изменения пропорций");
+ }catch(e){fail(e);}
+}
+function renameImportedIds(root,prefix){
+ var nodes=[root].concat(Array.from(root.querySelectorAll("*")));
+ var mapping=new Map(),counter=0;
+ nodes.forEach(function(node){
+  var old=node.getAttribute("id");
+  if(!old)return;
+  var fresh=prefix+"-ref-"+(++counter);
+  if(!mapping.has(old))mapping.set(old,fresh);
+  node.setAttribute("id",fresh);
+ });
+ nodes.forEach(function(node){
+  Array.from(node.attributes).forEach(function(attr){
+   if(attr.name==="id")return;
+   var value=attr.value;
+   if(attr.localName==="href" && value.charAt(0)==="#" && mapping.has(value.slice(1)))
+    value="#"+mapping.get(value.slice(1));
+   value=value.replace(/url\s*\(\s*(['"]?)#([^'")]+)\1\s*\)/g,function(match,q,id){
+    return mapping.has(id)?"url(#"+mapping.get(id)+")":match;
+   });
+   if(value!==attr.value)node.setAttribute(attr.name,value);
+  });
+ });
+}
+function importOverlaySvg(source){
+ try{
+  if(working)throw Error("Дождись окончания текущего действия");
+  if(!window.VectorOverlay)throw Error("Модуль импорта SVG недоступен");
+  var imported=sanitize(source),v=view(),iv=imported.viewBox.baseVal;
+  var width=iv.width,height=iv.height;
+  if(!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0)
+   throw Error("Импортированный SVG не имеет допустимого viewBox");
+  var initial=VectorOverlay.fit(v,{width:width,height:height},.65);
+  var group=document.createElementNS(ns,"g");
+  group.id=newId("vectora-import");
+  group.setAttribute("data-vectora-overlay","true");
+  // Keep nested SVG viewport + defs so gradients, masks, filters and strokes remain vector.
+  imported.removeAttribute("id");
+  renameImportedIds(imported,group.id);
+  imported.setAttribute("x","0");imported.setAttribute("y","0");
+  imported.setAttribute("width",width);imported.setAttribute("height",height);
+  group.appendChild(imported);
+  var previousRedo=redo.slice();
+  remember();
+  ensureBaseLayer();
+  applyOverlayTransform(group,initial);
+  art.appendChild(group); // Imported SVG is never a child of the masked base layer.
+  VectorLayers.repair(art,contentGroup);
+  var output=snapshot();
+  if(output.length>8388608){
+   group.remove();undo.pop();redo=previousRedo;
+   throw Error("Общий SVG превышает лимит 8 МиБ");
+  }
+  setTool("select");
+  pick(group);persist();
+  notify("SVG наложен поверх рисунка. Перетащи или измени общий масштаб двумя пальцами / ползунком.");
+ }catch(e){fail(e);}
+}
+function eraseMask(){
+ // Erasing affects only the base drawing, and cannot cut through imported SVG.
+ var base=ensureBaseLayer();
+ if(maskId){
+  var existing=Array.from(art.querySelectorAll("mask")).find(function(e){return e.id===maskId;});
+  if(existing){VectorLayers.repair(art,base);return existing;}
+ }
+ var defs=Array.from(art.children).find(function(el){return el.localName==="defs";});
+ if(!defs){defs=document.createElementNS(ns,"defs");art.insertBefore(defs,art.firstChild);}
+ var mask=document.createElementNS(ns,"mask"),v=view();
+ maskId=newId("vectora-eraser");mask.id=maskId;
+ mask.setAttribute("maskUnits","userSpaceOnUse");
+ mask.setAttribute("maskContentUnits","userSpaceOnUse");
+ ["x","y","width","height"].forEach(function(k){mask.setAttribute(k,v[k]);});
+ var white=document.createElementNS(ns,"rect");
+ ["x","y","width","height"].forEach(function(k){white.setAttribute(k,v[k]);});
+ white.setAttribute("fill","#fff");mask.appendChild(white);defs.appendChild(mask);
+ base.setAttribute("data-mask-id",maskId);
+ base.setAttribute("mask","url(#"+maskId+")");
+ VectorLayers.repair(art,base);
+ return mask;
+}
+function startInk(ev){
+ remember();
+ var erase=mode==="eraser",parent=erase?eraseMask():container();
+ var el=document.createElementNS(ns,"path"),p=point(ev,art);
+ el.setAttribute("fill","none");
+ el.setAttribute("stroke",erase?"#000000":currentHex());
+ el.setAttribute("stroke-width",$("sizeInput").value);
+ el.setAttribute("stroke-opacity",erase?"1":currentAlpha());
+ el.setAttribute("stroke-linecap","round");
+ el.setAttribute("stroke-linejoin","round");
+ el.setAttribute("d","M "+fmt(p)+" l 0.01 0");
+ parent.appendChild(el);
+ draw={id:ev.pointerId,el:el,points:[p],previous:p};
+}
+function appendInk(ev){
+ if(!draw||ev.pointerId!==draw.id)return;
+ var p=point(ev,art),prev=draw.previous,dx=p.x-prev.x,dy=p.y-prev.y;
+ if(dx*dx+dy*dy<.25||draw.points.length>=6000)return;
+ draw.points.push(p);draw.previous=p;
+ var points=draw.points,d="M "+fmt(points[0]);
+ // Quadratic interpolation smooths stylus strokes but retains pure SVG geometry.
+ if(points.length===2){d+=" L "+fmt(points[1]);}
+ else{
+  for(var i=1;i<points.length-1;i++){
+   var end={x:(points[i].x+points[i+1].x)/2,y:(points[i].y+points[i+1].y)/2};
+   d+=" Q "+fmt(points[i])+" "+fmt(end);
+  }
+  d+=" L "+fmt(points[points.length-1]);
+ }
+ draw.el.setAttribute("d",d);
+}
+function stopInk(){if(draw){draw=null;persist();notify(mode==="eraser"?"Стирание записано в SVG-маску.":"Векторная кисть: штрих добавлен.");}}
+function drawShape(type){
+ if(working)return;
+ remember();var v=view(),el=document.createElementNS(ns,type);
+ if(type==="rect"){el.setAttribute("x",v.x+v.width*.3);el.setAttribute("y",v.y+v.height*.3);el.setAttribute("width",v.width*.35);el.setAttribute("height",v.height*.25);}
+ if(type==="ellipse"){el.setAttribute("cx",v.x+v.width*.5);el.setAttribute("cy",v.y+v.height*.5);el.setAttribute("rx",v.width*.19);el.setAttribute("ry",v.height*.15);}
+ if(type==="line"){el.setAttribute("x1",v.x+v.width*.3);el.setAttribute("y1",v.y+v.height*.3);el.setAttribute("x2",v.x+v.width*.7);el.setAttribute("y2",v.y+v.height*.65);}
+ if(type==="text"){el.setAttribute("x",v.x+v.width*.3);el.setAttribute("y",v.y+v.height*.5);el.setAttribute("font-size",Math.min(v.width,v.height)*.09);el.textContent="Текст";}
+ el.setAttribute("fill",type==="line"?"none":currentHex());
+ el.setAttribute("fill-opacity",currentAlpha());
+ el.setAttribute("stroke",currentHex());el.setAttribute("stroke-width",Math.min(6,Number($("sizeInput").value)));
+ container().appendChild(el);pick(el);persist();setTool("select");
+}
+function findEditable(target){
+ // Treat an imported SVG as one transformable vector group, never isolated children.
+ var el=target,insideOverlay=null,shape=null;
+ while(el&&el!==art){
+  if(el.getAttribute && el.getAttribute("data-vectora-overlay")==="true")insideOverlay=el;
+  else if(!shape&&el.localName&&editTags.has(el.localName))shape=el;
+  el=el.parentNode;
+ }
+ return insideOverlay||shape||null;
+}
+function renderCanvas(maxSide,maxArea){
+ return new Promise(function(resolve,reject){
+  try{
+   var v=view(),scale=Math.min(16,maxSide/Math.max(v.width,v.height),Math.sqrt(maxArea/(v.width*v.height)));
+   var w=Math.max(1,Math.round(v.width*scale)),h=Math.max(1,Math.round(v.height*scale));
+   var clone=art.cloneNode(true);
+   clone.querySelectorAll("[data-picked]").forEach(function(n){n.removeAttribute("data-picked");});
+   clone.setAttribute("xmlns",ns);clone.setAttribute("width",w);clone.setAttribute("height",h);
+   var xml=new XMLSerializer().serializeToString(clone);
+   var url=URL.createObjectURL(new Blob([xml],{type:"image/svg+xml;charset=utf-8"}));
+   var img=new Image();
+   img.onload=function(){
+    URL.revokeObjectURL(url);
+    try{
+     var canvas=document.createElement("canvas");canvas.width=w;canvas.height=h;
+     var context=canvas.getContext("2d",{willReadFrequently:true});
+     if(!context)throw Error("Canvas недоступен");
+     context.clearRect(0,0,w,h);context.drawImage(img,0,0,w,h);
+     resolve({canvas:canvas,ctx:context,v:v,w:w,h:h});
+    }catch(e){reject(e);}
+   };
+   img.onerror=function(){URL.revokeObjectURL(url);reject(Error("SVG не удалось отобразить"));};
+   img.src=url;
+  }catch(e){reject(e);}
+ });
+}
+function getPixel(p,r){
+ var ix=Math.floor((p.x-r.v.x)/r.v.width*r.w),iy=Math.floor((p.y-r.v.y)/r.v.height*r.h);
+ return{x:ix,y:iy};
+}
+function setBusy(value){
+ working=!!value;$("busy").hidden=!value;
+}
+async function fillAt(ev){
+ if(working)return;
+ var p=point(ev,art);setBusy(true);
+ try{
+  await new Promise(function(resolve){setTimeout(resolve,10);});
+  var r=await renderCanvas(1500,1750000),b=getPixel(p,r);
+  if(b.x<0||b.x>=r.w||b.y<0||b.y>=r.h)throw Error("Нажми внутри рисунка");
+  var data=r.ctx.getImageData(0,0,r.w,r.h);
+  if(!window.VectorFill)throw Error("Модуль векторной заливки не найден");
+  var region=window.VectorFill.extract(data,r.w,r.h,b.x,b.y,
+    Number($("toleranceInput").value),r.v);
+  if(region.path.length>1200000)throw Error("Контур слишком сложный; уменьши допуск");
+  remember();
+  var el=document.createElementNS(ns,"path");
+  el.setAttribute("d",region.path);
+  el.setAttribute("fill-rule","evenodd");
+  el.setAttribute("fill",currentHex());
+  el.setAttribute("fill-opacity",currentAlpha());
+  el.setAttribute("stroke","none");
+  container().appendChild(el);
+  persist();
+  notify("Заливка: "+region.pixels+" пикселей распознано, "+region.contours+" векторных контуров.");
+ }catch(e){fail(e);}finally{setBusy(false);}
+}
+async function sampleAt(ev){
+ if(working)return;
+ var p=point(ev,art);setBusy(true);
+ try{
+  var r=await renderCanvas(1300,1200000),b=getPixel(p,r);
+  if(b.x<0||b.y<0||b.x>=r.w||b.y>=r.h)throw Error("Нажми внутри рисунка");
+  var d=r.ctx.getImageData(b.x,b.y,1,1).data;
+  var hex="#"+[d[0],d[1],d[2]].map(function(n){return n.toString(16).padStart(2,"0");}).join("");
+  setColor(hex,d[3]/255);
+  notify("Пипетка: "+hex.toUpperCase()+", альфа "+Math.round(d[3]/255*100)+"%");
+ }catch(e){fail(e);}finally{setBusy(false);}
+}
+function overlayDistance(a,b){return Math.hypot(a.x-b.x,a.y-b.y);}
+function overlayMidpoint(a,b){return{x:(a.x+b.x)/2,y:(a.y+b.y)/2};}
+board.addEventListener("pointerdown",function(ev){
+ if(working)return;
+ if(mode==="bucket"){if(ev.isPrimary){fillAt(ev);ev.preventDefault();}return;}
+ if(mode==="eyedrop"){if(ev.isPrimary){sampleAt(ev);ev.preventDefault();}return;}
+ if(mode==="brush"||mode==="eraser"){
+  if(!ev.isPrimary)return;
+  clearSelection();startInk(ev);
+  try{board.setPointerCapture(ev.pointerId);}catch(e){}
+  ev.preventDefault();return;
+ }
+ var target=findEditable(ev.target);
+ var isImported=target&&target.getAttribute("data-vectora-overlay")==="true";
+ var continued=overlayTouches.size>0&&selected&&
+               selected.getAttribute("data-vectora-overlay")==="true"&&
+               (target===selected||target===null);
+ if(isImported||continued){
+  var group=continued?selected:target;
+  if(overlayTouches.size===0){
+   if(!ev.isPrimary)return;
+   remember();pick(group);
+  }else if(selected!==group||overlayTouches.size>=2)return;
+  var p=point(ev,art);
+  overlayTouches.set(ev.pointerId,p);
+  if(overlayTouches.size===1){
+   overlayDrag={id:ev.pointerId,start:p,initial:overlayState(group),group:group};
+   overlayGesture=null;
+  }else{
+   var pair=Array.from(overlayTouches.values());
+   overlayGesture={
+    group:group,initial:overlayState(group),
+    midpoint:overlayMidpoint(pair[0],pair[1]),
+    distance:Math.max(0.001,overlayDistance(pair[0],pair[1]))
+   };
+   overlayDrag=null;
+  }
+  try{board.setPointerCapture(ev.pointerId);}catch(e){}
+  ev.preventDefault();return;
+ }
+ if(!ev.isPrimary || overlayTouches.size)return;
+ if(!target){clearSelection();return;}
+ pick(target);remember();
+ var parent=target.parentNode&&target.parentNode.getScreenCTM?target.parentNode:art;
+ drag={id:ev.pointerId,el:target,ref:parent,origin:point(ev,parent),initial:target.getAttribute("transform")||""};
+ try{board.setPointerCapture(ev.pointerId);}catch(e){}
+ ev.preventDefault();
+});
+board.addEventListener("pointermove",function(ev){
+ if(overlayTouches.has(ev.pointerId)){
+  overlayTouches.set(ev.pointerId,point(ev,art));
+  if(overlayTouches.size>=2&&overlayGesture){
+   var touches=Array.from(overlayTouches.values());
+   var center=overlayMidpoint(touches[0],touches[1]);
+   var ratio=overlayDistance(touches[0],touches[1])/overlayGesture.distance;
+   try{
+    applyOverlayTransform(overlayGesture.group,VectorOverlay.pinch(
+       overlayGesture.initial,overlayGesture.midpoint,center,ratio));
+   }catch(e){fail(e);}
+  }else if(overlayDrag&&overlayDrag.id===ev.pointerId){
+   var now=overlayTouches.get(ev.pointerId);
+   applyOverlayTransform(overlayDrag.group,VectorOverlay.move(
+     overlayDrag.initial,now.x-overlayDrag.start.x,now.y-overlayDrag.start.y));
+  }
+  return;
+ }
+ if(draw){if(draw.id===ev.pointerId)appendInk(ev);return;}
+ if(!drag||drag.id!==ev.pointerId)return;
+ var p=point(ev,drag.ref);
+ var dx=p.x-drag.origin.x,dy=p.y-drag.origin.y;
+ drag.el.setAttribute("transform",(drag.initial+" translate("+dx.toFixed(2)+" "+dy.toFixed(2)+")").trim());
+});
+function pointerStop(ev){
+ if(overlayTouches.has(ev.pointerId)){
+  overlayTouches.delete(ev.pointerId);
+  overlayGesture=null;
+  if(overlayTouches.size===1&&selected&&selected.getAttribute("data-vectora-overlay")==="true"){
+   var still=Array.from(overlayTouches.entries())[0];
+   overlayDrag={id:still[0],start:still[1],initial:overlayState(selected),group:selected};
+  }else if(overlayTouches.size===0){
+   overlayDrag=null;persist();
+   notify("SVG перемещён или масштабирован с сохранением пропорций.");
+  }
+  return;
+ }
+ if(draw&&draw.id===ev.pointerId)stopInk();
+ if(drag&&drag.id===ev.pointerId){drag=null;persist();}
+}
+board.addEventListener("pointerup",pointerStop);
+board.addEventListener("pointercancel",pointerStop);
+board.addEventListener("lostpointercapture",pointerStop);
+function downloadBlob(blob,name){
+ var url=URL.createObjectURL(blob),a=document.createElement("a");
+ a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+ setTimeout(function(){URL.revokeObjectURL(url);},2000);
+}
+function saveSvg(){
+ try{
+  var source=snapshot();
+  if(source.length>8388608)throw Error("SVG слишком большой для сохранения");
+  if(window.AndroidBridge)AndroidBridge.saveSvg(source);
+  else downloadBlob(new Blob([source],{type:"image/svg+xml;charset=utf-8"}),"drawing.svg");
+  notify("SVG готов к сохранению — векторный формат сохранён.");
+ }catch(e){fail(e);}
+}
+async function exportPng(){
+ if(working)return;setBusy(true);
+ try{
+  var r=await renderCanvas(2600,4000000);
+  if(window.AndroidBridge)AndroidBridge.exportPng(r.canvas.toDataURL("image/png"));
+  else await new Promise(function(resolve,reject){
+   r.canvas.toBlob(function(b){if(!b){reject(Error("PNG не создан"));return;}downloadBlob(b,"drawing.png");resolve();},"image/png");
+  });
+  notify("PNG готов. SVG-оригинал остаётся векторным.");
+ }catch(e){fail(e);}finally{setBusy(false);}
+}
+$("newDoc").onclick=newDoc;
+$("openDoc").onclick=function(){if(window.AndroidBridge)AndroidBridge.openSvg();else $("fileInput").click();};
+$("overlayDoc").onclick=function(){if(window.AndroidBridge)AndroidBridge.importOverlaySvg();else $("overlayFileInput").click();};
+$("saveDoc").onclick=saveSvg;$("exportPng").onclick=exportPng;
+$("fileInput").onchange=function(){
+ var file=this.files&&this.files[0];if(!file)return;
+ if(file.size>8388608){fail("SVG больше 8 МиБ");return;}
+ file.text().then(function(s){loadSvg(s);}).catch(fail);
+ this.value="";
+};
+$("overlayFileInput").onchange=function(){
+ var file=this.files&&this.files[0];if(!file)return;
+ if(file.size>8388608){fail("SVG больше 8 МиБ");return;}
+ file.text().then(importOverlaySvg).catch(fail);this.value="";
+};
+var sliderEditing=false;
+$("overlayScale").onpointerdown=function(){
+ if(!sliderEditing&&selected){remember();sliderEditing=true;}
+};
+$("overlayScale").onkeydown=function(){
+ if(!sliderEditing&&selected){remember();sliderEditing=true;}
+};
+$("overlayScale").oninput=function(){
+ if(!sliderEditing&&selected){remember();sliderEditing=true;}
+ scaleOverlayBy(Number(this.value));
+};
+$("overlayScale").onchange=function(){sliderEditing=false;};
+$("scaleDown").onclick=function(){
+ if(!selected)return;remember();
+ var state=overlayState(selected);scaleOverlayBy(Math.round(state.scale/state.baseScale*100/1.25));
+};
+$("scaleUp").onclick=function(){
+ if(!selected)return;remember();
+ var state=overlayState(selected);scaleOverlayBy(Math.round(state.scale/state.baseScale*100*1.25));
+};
+Object.keys(ids).forEach(function(k){$(ids[k]).onclick=function(){setTool(k);};});
+$("rectTool").onclick=function(){drawShape("rect");};
+$("ellipseTool").onclick=function(){drawShape("ellipse");};
+$("lineTool").onclick=function(){drawShape("line");};
+$("textTool").onclick=function(){drawShape("text");};
+$("undoTool").onclick=function(){if(!undo.length)return;redo.push(snapshot());loadSvg(undo.pop(),false);notify("Действие отменено.");};
+$("redoTool").onclick=function(){if(!redo.length)return;undo.push(snapshot());loadSvg(redo.pop(),false);notify("Действие повторено.");};
+$("deleteShape").onclick=function(){if(!selected)return;remember();selected.remove();clearSelection();persist();notify("Фигура удалена.");};
+$("applyColor").onclick=function(){
+ if(!selected)return;remember();
+ if(selected.localName==="line"){
+  selected.setAttribute("stroke",currentHex());selected.setAttribute("stroke-opacity",currentAlpha());
+ }else{selected.setAttribute("fill",currentHex());selected.setAttribute("fill-opacity",currentAlpha());}
+ persist();notify("Цвет фигуры изменён.");
+};
+$("textValue").onchange=function(){
+ if(!selected||selected.localName!=="text")return;
+ remember();selected.textContent=this.value;persist();notify("Текст изменён.");
+};
+$("paintColor").oninput=function(){setColor(this.value);};
+$("hexInput").onchange=function(){
+ var value=this.value.trim();
+ if(/^#[0-9a-fA-F]{3}$/.test(value))value="#"+value.slice(1).split("").map(function(c){return c+c;}).join("");
+ if(/^#[0-9a-fA-F]{8}$/.test(value)){
+  setColor(value.slice(0,7),parseInt(value.slice(7),16)/255);return;
+ }
+ try{setColor(value);}catch(e){fail(e);$("hexInput").value=currentHex().toUpperCase();}
+};
+$("alphaInput").oninput=function(){$("alphaOut").textContent=this.value+"%";};
+$("sizeInput").oninput=function(){$("sizeOut").textContent=this.value;};
+$("toleranceInput").oninput=function(){$("toleranceOut").textContent=this.value;};
+["#000000","#ffffff","#e54a4a","#f5ad3f","#f5df69","#4ec785","#489dff","#a875e6","#e879ae","#65798d"].forEach(function(color){
+ var el=document.createElement("button");el.className="swatch";el.style.background=color;el.title=color;
+ el.setAttribute("aria-label","Выбрать "+color);
+ el.onclick=function(){setColor(color,1);};
+ $("swatches").appendChild(el);
+});
+window.editor={loadSvg:loadSvg,importOverlaySvg:importOverlaySvg,showError:fail};
+})();
+</script></body></html>

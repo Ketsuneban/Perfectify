@@ -1,0 +1,111 @@
+name: Vectora SVG — standalone Android editor
+
+on:
+  push:
+    branches:
+      - feature/ibis-svg-bridge
+    paths:
+      - 'ibis-svg-bridge/**'
+      - '.github/workflows/ibis-svg-bridge.yml'
+  pull_request:
+    paths:
+      - 'ibis-svg-bridge/**'
+      - '.github/workflows/ibis-svg-bridge.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify inline editor JavaScript syntax
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          html = Path('ibis-svg-bridge/app/src/main/assets/editor.html').read_text()
+          assert html.count('<script>') == 1 and html.count('</script>') == 1
+          Path('/tmp/ibis-svg-editor.js').write_text(html.split('<script>')[1].split('</script>')[0])
+          PY
+          node --check /tmp/ibis-svg-editor.js
+          node --check ibis-svg-bridge/app/src/main/assets/vector-overlay.js
+          node --check ibis-svg-bridge/app/src/main/assets/vector-layers.js
+
+      - name: Test contour-to-vector flood fill
+        run: node --test ibis-svg-bridge/tests/floodfill.test.cjs ibis-svg-bridge/tests/vector-overlay.test.cjs ibis-svg-bridge/tests/vector-layers.test.cjs
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK 35
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Assemble APK
+        run: gradle -p ibis-svg-bridge --no-daemon assembleDebug
+
+      - name: Upload Android debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: vectora-svg-debug-apk
+          path: ibis-svg-bridge/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+  publish:
+    name: Publish Vectora SVG preview APK
+    needs: android
+    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/ibis-svg-bridge'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: vectora-svg-debug-apk
+          path: dist
+      - name: Publish prerelease only if tag is new
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="vectora-svg-v0.4.1"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release already exists: $TAG"
+            exit 0
+          fi
+          test -s dist/app-debug.apk
+          mv dist/app-debug.apk dist/vectora-svg-v0.4.1-debug.apk
+          cat > release-notes.md <<'EOF'
+          Vectora SVG v0.4.1 — eraser layer ordering hotfix.
+          
+          - Fix: imported SVG always renders above the base drawing/eraser SVG mask.
+          - Fix: automatically repair saved v0.4.0 projects with overlays nested in the masked base.
+          - Import multiple SVG documents as separate selectable vector groups on top of the current artwork.\n          - Uniform scaling with two-finger pinch and 5–1000% size slider; touch drag without distortion.\n          - Internal gradient/clip/mask IDs are namespaced to prevent collisions.\n          - The merged document remains SVG, not a raster image.\n          - Full-screen standalone SVG editor, no ibisPaint dependency or overlay permission.
+          - Freehand vector brush with adjustable color, opacity and thickness.
+          - Connected-region flood fill, raster-sampled and vector-traced to SVG paths (with holes).
+          - Eyedropper color sampling; color wheel/picker, HEX, opacity and swatch palette.
+          - Nondestructive SVG-mask eraser.
+          - Basic shapes, editable text, move/selection, undo/redo and autosave.
+          - Open/save SVG using Android document picker, optional PNG export.
+          
+          NOTE: This is a standalone Android app. SVGs remain vector documents. Region detection is raster-based but each successful bucket operation generates SVG path geometry rather than image data. Debug-signed APK for testing; not a store-ready production release.
+          EOF
+          gh release create "$TAG" dist/vectora-svg-v0.4.1-debug.apk \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Vectora SVG v0.4.1 — eraser below imported SVG" \
+            --notes-file release-notes.md \
+            --prerelease
