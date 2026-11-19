@@ -11,7 +11,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
 final class Store {
-    static final int MAX_SVG_BYTES = 2 * 1024 * 1024;
+    static final int MAX_SVG_BYTES = 8 * 1024 * 1024;
     static final String CURRENT = "current.svg";
     static final String EXPORT = "pending-export.svg";
     static final String PNG = "shared.png";
@@ -34,7 +34,7 @@ final class Store {
 
     static void writeLocal(Context context, String name, String text) throws IOException {
         byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
-        if (bytes.length > MAX_SVG_BYTES) throw new IOException("SVG exceeds 2 MiB limit");
+        if (bytes.length > MAX_SVG_BYTES) throw new IOException("SVG exceeds 8 MiB limit");
         try (FileOutputStream out = context.openFileOutput(name, Context.MODE_PRIVATE)) {
             out.write(bytes);
         }
@@ -57,7 +57,7 @@ final class Store {
         byte[] block = new byte[8192];
         int n;
         while ((n = in.read(block)) != -1) {
-            if (buffer.size() + n > MAX_SVG_BYTES) throw new IOException("SVG exceeds 2 MiB limit");
+            if (buffer.size() + n > MAX_SVG_BYTES) throw new IOException("SVG exceeds 8 MiB limit");
             buffer.write(block, 0, n);
         }
         return buffer.toString(StandardCharsets.UTF_8.name());
