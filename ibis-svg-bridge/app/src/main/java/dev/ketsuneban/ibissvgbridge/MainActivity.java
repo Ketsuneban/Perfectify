@@ -29,6 +29,7 @@ public final class MainActivity extends Activity {
     private static final int OPEN_SVG = 701;
     private static final int SAVE_SVG = 702;
     private static final int EXPORT_PNG = 703;
+    private static final int IMPORT_OVERLAY = 704;
     private static final String PNG_FILE = "vectora-export.png";
     private final Object ioLock = new Object();
     private WebView web;
@@ -65,7 +66,9 @@ public final class MainActivity extends Activity {
         try {
             String html = readAsset("editor.html");
             String fillLibrary = readAsset("vector-fill.js");
+            String overlayLibrary = readAsset("vector-overlay.js");
             html = html.replace("<!-- VECTOR_FILL_SCRIPT -->", "<script>\n" + fillLibrary + "\n</script>");
+            html = html.replace("<!-- VECTOR_OVERLAY_SCRIPT -->", "<script>\n" + overlayLibrary + "\n</script>");
             web.loadDataWithBaseURL("https://appassets.androidplatform.net/",
                     html, "text/html", "UTF-8", null);
         } catch (IOException e) {
@@ -134,14 +137,26 @@ public final class MainActivity extends Activity {
         }
     }
 
-    private void pickSvg() {
+    private void pickSvg() { pickSvg(OPEN_SVG); }
+
+    private void pickSvg(int requestCode) {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("*/*");
         intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{
                 "image/svg+xml", "text/xml", "application/xml", "text/plain"
         });
-        startActivityForResult(intent, OPEN_SVG);
+        startActivityForResult(intent, requestCode);
+    }
+
+    private void importOverlaySvg(Uri uri) {
+        try {
+            String source = Store.readUri(this, uri);
+            web.evaluateJavascript("window.editor && window.editor.importOverlaySvg(" +
+                    JSONObject.quote(source) + ");", null);
+        } catch (Exception error) {
+            message("Ошибка наложения SVG: " + error.getMessage());
+        }
     }
 
     private void createDocument(String mime, String name, int request) {
@@ -159,6 +174,8 @@ public final class MainActivity extends Activity {
             Uri uri = data.getData();
             if (code == OPEN_SVG) {
                 importSvg(uri);
+            } else if (code == IMPORT_OVERLAY) {
+                importOverlaySvg(uri);
             } else if (code == SAVE_SVG) {
                 String svg = Store.readLocal(this, Store.EXPORT);
                 writeUri(uri, svg.getBytes(StandardCharsets.UTF_8));
@@ -193,6 +210,10 @@ public final class MainActivity extends Activity {
     public final class NativeBridge {
         @JavascriptInterface public void openSvg() {
             runOnUiThread(MainActivity.this::pickSvg);
+        }
+
+        @JavascriptInterface public void importOverlaySvg() {
+            runOnUiThread(() -> pickSvg(IMPORT_OVERLAY));
         }
 
         @JavascriptInterface public void autosave(String source) {
