@@ -462,16 +462,47 @@ async function sampleAt(ev){
   notify("Пипетка: "+hex.toUpperCase()+", альфа "+Math.round(d[3]/255*100)+"%");
  }catch(e){fail(e);}finally{setBusy(false);}
 }
+function overlayDistance(a,b){return Math.hypot(a.x-b.x,a.y-b.y);}
+function overlayMidpoint(a,b){return{x:(a.x+b.x)/2,y:(a.y+b.y)/2};}
 board.addEventListener("pointerdown",function(ev){
- if(working||!ev.isPrimary)return;
- if(mode==="bucket"){fillAt(ev);ev.preventDefault();return;}
- if(mode==="eyedrop"){sampleAt(ev);ev.preventDefault();return;}
+ if(working)return;
+ if(mode==="bucket"){if(ev.isPrimary){fillAt(ev);ev.preventDefault();}return;}
+ if(mode==="eyedrop"){if(ev.isPrimary){sampleAt(ev);ev.preventDefault();}return;}
  if(mode==="brush"||mode==="eraser"){
+  if(!ev.isPrimary)return;
   clearSelection();startInk(ev);
   try{board.setPointerCapture(ev.pointerId);}catch(e){}
   ev.preventDefault();return;
  }
  var target=findEditable(ev.target);
+ var isImported=target&&target.getAttribute("data-vectora-overlay")==="true";
+ var continued=overlayTouches.size>0&&selected&&
+               selected.getAttribute("data-vectora-overlay")==="true"&&
+               (target===selected||target===null);
+ if(isImported||continued){
+  var group=continued?selected:target;
+  if(overlayTouches.size===0){
+   if(!ev.isPrimary)return;
+   remember();pick(group);
+  }else if(selected!==group||overlayTouches.size>=2)return;
+  var p=point(ev,art);
+  overlayTouches.set(ev.pointerId,p);
+  if(overlayTouches.size===1){
+   overlayDrag={id:ev.pointerId,start:p,initial:overlayState(group),group:group};
+   overlayGesture=null;
+  }else{
+   var pair=Array.from(overlayTouches.values());
+   overlayGesture={
+    group:group,initial:overlayState(group),
+    midpoint:overlayMidpoint(pair[0],pair[1]),
+    distance:Math.max(0.001,overlayDistance(pair[0],pair[1]))
+   };
+   overlayDrag=null;
+  }
+  try{board.setPointerCapture(ev.pointerId);}catch(e){}
+  ev.preventDefault();return;
+ }
+ if(!ev.isPrimary || overlayTouches.size)return;
  if(!target){clearSelection();return;}
  pick(target);remember();
  var parent=target.parentNode&&target.parentNode.getScreenCTM?target.parentNode:art;
@@ -480,13 +511,45 @@ board.addEventListener("pointerdown",function(ev){
  ev.preventDefault();
 });
 board.addEventListener("pointermove",function(ev){
- if(draw){appendInk(ev);return;}
+ if(overlayTouches.has(ev.pointerId)){
+  overlayTouches.set(ev.pointerId,point(ev,art));
+  if(overlayTouches.size>=2&&overlayGesture){
+   var touches=Array.from(overlayTouches.values());
+   var center=overlayMidpoint(touches[0],touches[1]);
+   var ratio=overlayDistance(touches[0],touches[1])/overlayGesture.distance;
+   try{
+    applyOverlayTransform(overlayGesture.group,VectorOverlay.pinch(
+       overlayGesture.initial,overlayGesture.midpoint,center,ratio));
+   }catch(e){fail(e);}
+  }else if(overlayDrag&&overlayDrag.id===ev.pointerId){
+   var now=overlayTouches.get(ev.pointerId);
+   applyOverlayTransform(overlayDrag.group,VectorOverlay.move(
+     overlayDrag.initial,now.x-overlayDrag.start.x,now.y-overlayDrag.start.y));
+  }
+  return;
+ }
+ if(draw){if(draw.id===ev.pointerId)appendInk(ev);return;}
  if(!drag||drag.id!==ev.pointerId)return;
  var p=point(ev,drag.ref);
  var dx=p.x-drag.origin.x,dy=p.y-drag.origin.y;
  drag.el.setAttribute("transform",(drag.initial+" translate("+dx.toFixed(2)+" "+dy.toFixed(2)+")").trim());
 });
-function pointerStop(){stopInk();if(drag){drag=null;persist();}}
+function pointerStop(ev){
+ if(overlayTouches.has(ev.pointerId)){
+  overlayTouches.delete(ev.pointerId);
+  overlayGesture=null;
+  if(overlayTouches.size===1&&selected&&selected.getAttribute("data-vectora-overlay")==="true"){
+   var still=Array.from(overlayTouches.entries())[0];
+   overlayDrag={id:still[0],start:still[1],initial:overlayState(selected),group:selected};
+  }else if(overlayTouches.size===0){
+   overlayDrag=null;persist();
+   notify("SVG перемещён или масштабирован с сохранением пропорций.");
+  }
+  return;
+ }
+ if(draw&&draw.id===ev.pointerId)stopInk();
+ if(drag&&drag.id===ev.pointerId){drag=null;persist();}
+}
 board.addEventListener("pointerup",pointerStop);
 board.addEventListener("pointercancel",pointerStop);
 board.addEventListener("lostpointercapture",pointerStop);
@@ -517,12 +580,38 @@ async function exportPng(){
 }
 $("newDoc").onclick=newDoc;
 $("openDoc").onclick=function(){if(window.AndroidBridge)AndroidBridge.openSvg();else $("fileInput").click();};
+$("overlayDoc").onclick=function(){if(window.AndroidBridge)AndroidBridge.importOverlaySvg();else $("overlayFileInput").click();};
 $("saveDoc").onclick=saveSvg;$("exportPng").onclick=exportPng;
 $("fileInput").onchange=function(){
  var file=this.files&&this.files[0];if(!file)return;
  if(file.size>2097152){fail("SVG больше 2 МиБ");return;}
  file.text().then(function(s){loadSvg(s);}).catch(fail);
  this.value="";
+};
+$("overlayFileInput").onchange=function(){
+ var file=this.files&&this.files[0];if(!file)return;
+ if(file.size>8388608){fail("SVG больше 8 МиБ");return;}
+ file.text().then(importOverlaySvg).catch(fail);this.value="";
+};
+var sliderEditing=false;
+$("overlayScale").onpointerdown=function(){
+ if(!sliderEditing&&selected){remember();sliderEditing=true;}
+};
+$("overlayScale").onkeydown=function(){
+ if(!sliderEditing&&selected){remember();sliderEditing=true;}
+};
+$("overlayScale").oninput=function(){
+ if(!sliderEditing&&selected){remember();sliderEditing=true;}
+ scaleOverlayBy(Number(this.value));
+};
+$("overlayScale").onchange=function(){sliderEditing=false;};
+$("scaleDown").onclick=function(){
+ if(!selected)return;remember();
+ var state=overlayState(selected);scaleOverlayBy(Math.round(state.scale/state.baseScale*100/1.25));
+};
+$("scaleUp").onclick=function(){
+ if(!selected)return;remember();
+ var state=overlayState(selected);scaleOverlayBy(Math.round(state.scale/state.baseScale*100*1.25));
 };
 Object.keys(ids).forEach(function(k){$(ids[k]).onclick=function(){setTool(k);};});
 $("rectTool").onclick=function(){drawShape("rect");};
@@ -561,6 +650,6 @@ $("toleranceInput").oninput=function(){$("toleranceOut").textContent=this.value;
  el.onclick=function(){setColor(color,1);};
  $("swatches").appendChild(el);
 });
-window.editor={loadSvg:loadSvg,showError:fail};
+window.editor={loadSvg:loadSvg,importOverlaySvg:importOverlaySvg,showError:fail};
 })();
 </script></body></html>
