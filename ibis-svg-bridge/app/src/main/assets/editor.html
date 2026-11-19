@@ -27,6 +27,7 @@ input{background:#243347;color:#fff;border:1px solid #475a74;border-radius:7px;p
 </style>
 </head>
 <body>
+<input id="localFile" type="file" accept=".svg,image/svg+xml" hidden>
 <div class="toolbar">
 <button id="open">Открыть</button>
 <button id="save" class="primary">Сохранить SVG</button>
@@ -183,12 +184,22 @@ function artPointer(){
   function stop(){drag=null;}
   board.addEventListener("pointerup",stop);board.addEventListener("pointercancel",stop);
 }
+function browserDownload(data,name,mime){
+  var blob=new Blob([data],{type:mime}),url=URL.createObjectURL(blob);
+  var a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(function(){URL.revokeObjectURL(url);},1500);
+}
+$("localFile").onchange=function(){
+  var file=this.files&&this.files[0];if(!file)return;
+  if(file.size>2097152){error("SVG больше 2 МиБ");return;}
+  file.text().then(function(xml){loadSvg(xml);}).catch(function(e){error(e.message);});this.value="";
+};
 function setAttr(name,value){
   if(!selected)return;
   mark();selected.setAttribute(name,String(value));notify("Изменено: "+name);
 }
-$("open").onclick=function(){if(window.AndroidBridge)AndroidBridge.openSvg();else error("Открытие доступно в Android-приложении");};
-$("save").onclick=function(){try{if(window.AndroidBridge)AndroidBridge.saveSvg(svgString());else error("Сохранение доступно в Android-приложении");}catch(e){error(e.message);}};
+$("open").onclick=function(){if(window.AndroidBridge)AndroidBridge.openSvg();else $("localFile").click();};
+$("save").onclick=function(){try{if(window.AndroidBridge)AndroidBridge.saveSvg(svgString());else browserDownload(svgString(),"edited.svg","image/svg+xml;charset=utf-8");}catch(e){error(e.message);}};
 $("rect").onclick=function(){add("rect");};$("circle").onclick=function(){add("circle");};
 $("line").onclick=function(){add("line");};$("text").onclick=function(){add("text");};
 $("path").onclick=function(){add("path");};
@@ -219,7 +230,7 @@ $("png").onclick=function(){
         var canvas=document.createElement("canvas");canvas.width=cw;canvas.height=ch;
         var ctx=canvas.getContext("2d");ctx.drawImage(img,0,0,cw,ch);
         if(window.AndroidBridge){AndroidBridge.sharePng(canvas.toDataURL("image/png"));notify("PNG готов: "+cw+" × "+ch);}
-        else error("Передача PNG доступна в Android-приложении");
+        else{browserDownload(canvas.toDataURL("image/png"),"edited.png","text/plain");notify("PNG сохранён. Открой его через ibisPaint.");}
       }catch(e){error("PNG: "+e.message);}
     };
     img.onerror=function(){URL.revokeObjectURL(url);error("Не удалось преобразовать SVG в PNG");};
