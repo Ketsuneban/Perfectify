@@ -1,192 +1,244 @@
 package dev.ketsuneban.ibissvgbridge;
 
-import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
-import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
-import android.provider.Settings;
-import android.view.Gravity;
+import android.util.Base64;
 import android.view.View;
-import android.widget.Button;
-import android.widget.LinearLayout;
-import android.widget.TextView;
+import android.webkit.WebChromeClient;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
 import android.widget.Toast;
+import android.webkit.JavascriptInterface;
+import org.json.JSONObject;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 
+/** Self-contained SVG drawing application. No other apps or overlays required. */
 public final class MainActivity extends Activity {
-    static final String ACTION_OPEN = "dev.ketsuneban.ibissvgbridge.OPEN";
-    static final String ACTION_SAVE = "dev.ketsuneban.ibissvgbridge.SAVE";
-    static final String ACTION_SHARE = "dev.ketsuneban.ibissvgbridge.SHARE";
-    private static final int REQUEST_OPEN = 501;
-    private static final int REQUEST_SAVE = 502;
-    private TextView status;
+    private static final int OPEN_SVG = 701;
+    private static final int SAVE_SVG = 702;
+    private static final int EXPORT_PNG = 703;
+    private static final String PNG_FILE = "vectora-export.png";
+    private final Object ioLock = new Object();
+    private WebView web;
+    private boolean ready = false;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        buildScreen();
-        if (Build.VERSION.SDK_INT >= 33 &&
-                checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{ Manifest.permission.POST_NOTIFICATIONS }, 500);
-        }
-        Intent incoming = getIntent();
-        if (incoming == null) return;
-        String action = incoming.getAction();
-        if (ACTION_OPEN.equals(action)) {
-            pickSvg();
-        } else if (ACTION_SAVE.equals(action)) {
-            createSvg();
-        } else if (ACTION_SHARE.equals(action)) {
-            sharePng();
-        } else if (Intent.ACTION_VIEW.equals(action) && incoming.getData() != null) {
-            importSvg(incoming.getData());
-        } else if (Intent.ACTION_SEND.equals(action)) {
-            Uri uri = incoming.getParcelableExtra(Intent.EXTRA_STREAM);
-            if (uri != null) importSvg(uri);
-        }
-    }
-
-    private void buildScreen() {
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(22), dp(36), dp(22), dp(22));
-        root.setBackgroundColor(Color.rgb(18, 23, 34));
-
-        TextView title = new TextView(this);
-        title.setText("SVG Bridge");
-        title.setTextColor(Color.WHITE);
-        title.setTextSize(26f);
-        root.addView(title);
-
-        TextView desc = new TextView(this);
-        desc.setText("Плавающий SVG-редактор поверх ibisPaint X. Сохраняет SVG и отправляет PNG в ibisPaint. Это не встроенный плагин ibisPaint.");
-        desc.setTextSize(15);
-        desc.setTextColor(Color.rgb(197, 205, 220));
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
-        p.setMargins(0, dp(10), 0, dp(16));
-        root.addView(desc, p);
-
-        addButton(root, "1. Выбрать SVG", this::pickSvg);
-        addButton(root, "2. Разрешить поверх других окон", this::requestOverlayPermission);
-        addButton(root, "3. Открыть плавающий редактор", this::showOverlay);
-        addButton(root, "4. Перейти в ibisPaint X", this::openIbis);
-
-        status = new TextView(this);
-        status.setTextColor(Color.rgb(166, 222, 217));
-        status.setTextSize(13);
-        status.setText("Все файлы обрабатываются локально. Разрешение на наложение окон нужно только для плавающего редактора.");
-        root.addView(status, p);
+        getWindow().setStatusBarColor(Color.rgb(15, 20, 31));
+        getWindow().setNavigationBarColor(Color.rgb(15, 20, 31));
+        FrameLayout root = new FrameLayout(this);
+        root.setFitsSystemWindows(true);
+        root.setBackgroundColor(Color.rgb(15, 20, 31));
+        web = new WebView(this);
+        web.setBackgroundColor(Color.rgb(15, 20, 31));
+        WebSettings options = web.getSettings();
+        options.setJavaScriptEnabled(true);
+        options.setAllowFileAccess(false);
+        options.setAllowContentAccess(false);
+        options.setBlockNetworkLoads(true);
+        options.setJavaScriptCanOpenWindowsAutomatically(false);
+        options.setSupportMultipleWindows(false);
+        options.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        options.setDomStorageEnabled(false);
+        web.setWebChromeClient(new WebChromeClient());
+        web.addJavascriptInterface(new NativeBridge(), "AndroidBridge");
+        web.setWebViewClient(new WebViewClient() {
+            @Override public void onPageFinished(WebView view, String url) {
+                ready = true;
+                if (!receiveIncoming(getIntent())) restorePrevious();
+            }
+        });
+        root.addView(web, new FrameLayout.LayoutParams(-1, -1));
         setContentView(root);
+        try {
+            String html = readAsset("editor.html");
+            String fillLibrary = readAsset("vector-fill.js");
+            html = html.replace("<!-- VECTOR_FILL_SCRIPT -->", "<script>\n" + fillLibrary + "\n</script>");
+            web.loadDataWithBaseURL("https://appassets.androidplatform.net/",
+                    html, "text/html", "UTF-8", null);
+        } catch (IOException e) {
+            message("Не удалось открыть редактор: " + e.getMessage());
+        }
     }
 
-    private void addButton(LinearLayout root, String label, Runnable callback) {
-        Button b = new Button(this);
-        b.setText(label);
-        b.setAllCaps(false);
-        b.setOnClickListener(v -> callback.run());
-        root.addView(b, new LinearLayout.LayoutParams(-1, dp(52)));
+    @Override public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
     }
 
-    private void pickSvg() {
-        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-        i.addCategory(Intent.CATEGORY_OPENABLE);
-        i.setType("*/*");
-        startActivityForResult(i, REQUEST_OPEN);
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (ready) receiveIncoming(intent);
     }
 
-    private void createSvg() {
-        Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-        i.addCategory(Intent.CATEGORY_OPENABLE);
-        i.setType("image/svg+xml");
-        i.putExtra(Intent.EXTRA_TITLE, "edited.svg");
-        startActivityForResult(i, REQUEST_SAVE);
+    private String readAsset(String path) throws IOException {
+        try (InputStream stream = getAssets().open(path);
+             ByteArrayOutputStream result = new ByteArrayOutputStream()) {
+            byte[] bytes = new byte[8192];
+            int read;
+            while ((read = stream.read(bytes)) != -1) result.write(bytes, 0, read);
+            return result.toString(StandardCharsets.UTF_8.name());
+        }
+    }
+
+    private boolean receiveIncoming(Intent intent) {
+        if (intent == null) return false;
+        String action = intent.getAction();
+        Uri uri = null;
+        if (Intent.ACTION_VIEW.equals(action)) uri = intent.getData();
+        if (Intent.ACTION_SEND.equals(action)) {
+            Object obj = intent.getParcelableExtra(Intent.EXTRA_STREAM);
+            if (obj instanceof Uri) uri = (Uri) obj;
+        }
+        if (uri != null) {
+            importSvg(uri);
+            intent.setAction(null);
+            return true;
+        }
+        return false;
+    }
+
+    private void restorePrevious() {
+        try {
+            String source = Store.readLocal(this, Store.CURRENT);
+            loadSvg(source);
+        } catch (IOException ignored) {
+            // The in-page editor starts with a blank SVG document.
+        }
+    }
+
+    private void loadSvg(String source) {
+        if (!ready || web == null) return;
+        web.evaluateJavascript("window.editor && window.editor.loadSvg(" +
+                JSONObject.quote(source) + ");", null);
     }
 
     private void importSvg(Uri uri) {
         try {
-            String svg = Store.readUri(this, uri);
-            Store.writeLocal(this, Store.CURRENT, svg);
-            setStatus("SVG загружен. Запусти редактор.");
-            if (Settings.canDrawOverlays(this)) showOverlay();
-        } catch (Exception ex) {
-            setStatus("Ошибка открытия: " + ex.getMessage());
+            String source = Store.readUri(this, uri);
+            loadSvg(source);
+        } catch (Exception error) {
+            message("Ошибка открытия SVG: " + error.getMessage());
         }
     }
 
-    private void requestOverlayPermission() {
-        if (Settings.canDrawOverlays(this)) {
-            setStatus("Разрешение уже предоставлено.");
-            return;
-        }
-        Intent i = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:" + getPackageName()));
-        startActivity(i);
+    private void pickSvg() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{
+                "image/svg+xml", "text/xml", "application/xml", "text/plain"
+        });
+        startActivityForResult(intent, OPEN_SVG);
     }
 
-    private void showOverlay() {
-        if (!Settings.canDrawOverlays(this)) {
-            requestOverlayPermission();
-            return;
-        }
-        Intent i = new Intent(this, OverlayService.class);
-        i.setAction(OverlayService.ACTION_SHOW);
-        if (Build.VERSION.SDK_INT >= 26) startForegroundService(i);
-        else startService(i);
-        setStatus("Редактор открыт. Можно перейти в ibisPaint.");
+    private void createDocument(String mime, String name, int request) {
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType(mime);
+        intent.putExtra(Intent.EXTRA_TITLE, name);
+        startActivityForResult(intent, request);
     }
 
-    private void openIbis() {
-        Intent launch = getPackageManager().getLaunchIntentForPackage("jp.ne.ibis.ibispaintx.app");
-        if (launch == null) {
-            setStatus("ibisPaint X не найден. Установи приложение отдельно.");
-            return;
-        }
-        startActivity(launch);
-    }
-
-    private void sharePng() {
-        try {
-            Uri uri = Uri.parse("content://dev.ketsuneban.ibissvgbridge.png/shared.png");
-            Intent send = new Intent(Intent.ACTION_SEND);
-            send.setType("image/png");
-            send.putExtra(Intent.EXTRA_STREAM, uri);
-            send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            startActivity(Intent.createChooser(send, "Передать PNG в ibisPaint X"));
-        } catch (Exception ex) {
-            setStatus("Ошибка передачи PNG: " + ex.getMessage());
-        }
-    }
-
-    @Override protected void onActivityResult(int request, int result, Intent data) {
-        super.onActivityResult(request, result, data);
+    @Override protected void onActivityResult(int code, int result, Intent data) {
+        super.onActivityResult(code, result, data);
         if (result != RESULT_OK || data == null || data.getData() == null) return;
         try {
-            if (request == REQUEST_OPEN) {
-                importSvg(data.getData());
-            } else if (request == REQUEST_SAVE) {
+            Uri uri = data.getData();
+            if (code == OPEN_SVG) {
+                importSvg(uri);
+            } else if (code == SAVE_SVG) {
                 String svg = Store.readLocal(this, Store.EXPORT);
-                try (java.io.OutputStream out = getContentResolver().openOutputStream(data.getData(), "w")) {
-                    if (out == null) throw new java.io.IOException("File could not be written");
-                    out.write(svg.getBytes(StandardCharsets.UTF_8));
+                writeUri(uri, svg.getBytes(StandardCharsets.UTF_8));
+                message("SVG сохранён");
+            } else if (code == EXPORT_PNG) {
+                File input = new File(getCacheDir(), PNG_FILE);
+                try (InputStream in = new java.io.FileInputStream(input);
+                     OutputStream out = getContentResolver().openOutputStream(uri, "w")) {
+                    if (out == null) throw new IOException("Невозможно сохранить PNG");
+                    byte[] bytes = new byte[8192];
+                    int n;
+                    while ((n = in.read(bytes)) != -1) out.write(bytes, 0, n);
                 }
-                setStatus("SVG сохранён.");
+                message("PNG экспортирован");
             }
-        } catch (Exception ex) {
-            setStatus("Ошибка: " + ex.getMessage());
+        } catch (Exception error) {
+            message("Ошибка сохранения: " + error.getMessage());
         }
     }
 
-    private void setStatus(String text) {
-        if (status != null) status.setText(text);
-        Toast.makeText(this, text, Toast.LENGTH_LONG).show();
+    private void writeUri(Uri uri, byte[] bytes) throws IOException {
+        try (OutputStream stream = getContentResolver().openOutputStream(uri, "w")) {
+            if (stream == null) throw new IOException("Не удалось открыть файл на запись");
+            stream.write(bytes);
+        }
     }
 
-    private int dp(float value) {
-        return (int) (getResources().getDisplayMetrics().density * value + 0.5f);
+    private void message(String msg) {
+        Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+    }
+
+    public final class NativeBridge {
+        @JavascriptInterface public void openSvg() {
+            runOnUiThread(MainActivity.this::pickSvg);
+        }
+
+        @JavascriptInterface public void autosave(String source) {
+            try {
+                String text = Store.validate(source);
+                synchronized (ioLock) { Store.writeLocal(MainActivity.this, Store.CURRENT, text); }
+            } catch (Exception ignored) {
+                // The editor remains usable even when its autosave quota is exceeded.
+            }
+        }
+
+        @JavascriptInterface public void saveSvg(String source) {
+            try {
+                String text = Store.validate(source);
+                synchronized (ioLock) { Store.writeLocal(MainActivity.this, Store.EXPORT, text); }
+                runOnUiThread(() -> createDocument("image/svg+xml", "drawing.svg", SAVE_SVG));
+            } catch (Exception e) { runOnUiThread(() -> message(e.getMessage())); }
+        }
+
+        @JavascriptInterface public void exportPng(String encoded) {
+            try {
+                final String prefix = "data:image/png;base64,";
+                if (encoded == null || !encoded.startsWith(prefix) || encoded.length() > 28000000)
+                    throw new IOException("Некорректный или слишком большой PNG");
+                byte[] png = Base64.decode(encoded.substring(prefix.length()), Base64.DEFAULT);
+                if (png.length < 8 || png[0] != (byte) 137 || png[1] != 80 ||
+                        png[2] != 78 || png[3] != 71) throw new IOException("Неверный PNG");
+                try (FileOutputStream out = new FileOutputStream(new File(getCacheDir(), PNG_FILE))) {
+                    out.write(png);
+                }
+                runOnUiThread(() -> createDocument("image/png", "drawing.png", EXPORT_PNG));
+            } catch (Exception e) { runOnUiThread(() -> message(e.getMessage())); }
+        }
+    }
+
+    @Override public void onBackPressed() {
+        // App has one editor screen; normal Android back exits and autosave persists.
+        super.onBackPressed();
+    }
+
+    @Override protected void onDestroy() {
+        if (web != null) {
+            web.removeJavascriptInterface("AndroidBridge");
+            web.destroy();
+            web = null;
+        }
+        super.onDestroy();
     }
 }
