@@ -216,6 +216,108 @@ function point(ev,element){
 function fmt(p){return p.x.toFixed(2)+" "+p.y.toFixed(2);}
 function container(){return contentGroup&&contentGroup.isConnected?contentGroup:art;}
 function newId(prefix){var i=0,id=prefix;while(document.getElementById(id))id=prefix+"-"+(++i);return id;}
+function overlayState(el){
+ var state={
+  x:Number(el.getAttribute("data-vectora-x")),
+  y:Number(el.getAttribute("data-vectora-y")),
+  scale:Number(el.getAttribute("data-vectora-scale")),
+  baseScale:Number(el.getAttribute("data-vectora-base-scale")),
+  width:Number(el.getAttribute("data-vectora-width")),
+  height:Number(el.getAttribute("data-vectora-height"))
+ };
+ if(!Number.isFinite(state.x)||!Number.isFinite(state.y)||
+    !Number.isFinite(state.scale)||state.scale<=0||
+    !Number.isFinite(state.baseScale)||state.baseScale<=0||
+    !Number.isFinite(state.width)||state.width<=0||
+    !Number.isFinite(state.height)||state.height<=0)throw Error("Некорректные размеры наложенного SVG");
+ return state;
+}
+function updateOverlayScaleUi(el){
+ var state=overlayState(el);
+ var pct=Math.round(state.scale/state.baseScale*100);
+ $("overlayScale").value=clamp(pct,5,1000);
+ $("overlayScaleValue").textContent=pct+"%";
+}
+function applyOverlayTransform(el,state){
+ if(!window.VectorOverlay)throw Error("Модуль масштабирования SVG недоступен");
+ if(!Number.isFinite(state.x)||!Number.isFinite(state.y)||
+    !Number.isFinite(state.scale)||state.scale<=0)throw Error("Некорректное преобразование");
+ el.setAttribute("data-vectora-x",state.x.toFixed(5));
+ el.setAttribute("data-vectora-y",state.y.toFixed(5));
+ el.setAttribute("data-vectora-scale",state.scale.toFixed(8));
+ el.setAttribute("data-vectora-base-scale",state.baseScale.toFixed(8));
+ el.setAttribute("data-vectora-width",state.width);
+ el.setAttribute("data-vectora-height",state.height);
+ el.setAttribute("transform",VectorOverlay.format(state));
+ if(selected===el)updateOverlayScaleUi(el);
+}
+function scaleOverlayBy(percent){
+ if(!selected||selected.getAttribute("data-vectora-overlay")!=="true")return;
+ if(!window.VectorOverlay)return;
+ try{
+  var old=overlayState(selected);
+  var desired=old.baseScale*clamp(percent,5,1000)/100;
+  var anchor={x:old.x+old.width*old.scale*.5,y:old.y+old.height*old.scale*.5};
+  var next=VectorOverlay.zoomAt(old,desired,anchor);
+  applyOverlayTransform(selected,next);persist();
+  notify("Масштаб SVG: "+Math.round(next.scale/next.baseScale*100)+"%, без изменения пропорций");
+ }catch(e){fail(e);}
+}
+function renameImportedIds(root,prefix){
+ var nodes=[root].concat(Array.from(root.querySelectorAll("*")));
+ var mapping=new Map(),counter=0;
+ nodes.forEach(function(node){
+  var old=node.getAttribute("id");
+  if(!old)return;
+  var fresh=prefix+"-ref-"+(++counter);
+  if(!mapping.has(old))mapping.set(old,fresh);
+  node.setAttribute("id",fresh);
+ });
+ nodes.forEach(function(node){
+  Array.from(node.attributes).forEach(function(attr){
+   if(attr.name==="id")return;
+   var value=attr.value;
+   if(attr.localName==="href" && value.charAt(0)==="#" && mapping.has(value.slice(1)))
+    value="#"+mapping.get(value.slice(1));
+   value=value.replace(/url\s*\(\s*(['"]?)#([^'")]+)\1\s*\)/g,function(match,q,id){
+    return mapping.has(id)?"url(#"+mapping.get(id)+")":match;
+   });
+   if(value!==attr.value)node.setAttribute(attr.name,value);
+  });
+ });
+}
+function importOverlaySvg(source){
+ try{
+  if(working)throw Error("Дождись окончания текущего действия");
+  if(!window.VectorOverlay)throw Error("Модуль импорта SVG недоступен");
+  var imported=sanitize(source),v=view(),iv=imported.viewBox.baseVal;
+  var width=iv.width,height=iv.height;
+  if(!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0)
+   throw Error("Импортированный SVG не имеет допустимого viewBox");
+  var initial=VectorOverlay.fit(v,{width:width,height:height},.65);
+  var group=document.createElementNS(ns,"g");
+  group.id=newId("vectora-import");
+  group.setAttribute("data-vectora-overlay","true");
+  // Keep nested SVG viewport + defs so gradients, masks, filters and strokes remain vector.
+  imported.removeAttribute("id");
+  renameImportedIds(imported,group.id);
+  imported.setAttribute("x","0");imported.setAttribute("y","0");
+  imported.setAttribute("width",width);imported.setAttribute("height",height);
+  group.appendChild(imported);
+  var previousRedo=redo.slice();
+  remember();
+  applyOverlayTransform(group,initial);
+  container().appendChild(group);
+  var output=snapshot();
+  if(output.length>8388608){
+   group.remove();undo.pop();redo=previousRedo;
+   throw Error("Общий SVG превышает лимит 8 МиБ");
+  }
+  setTool("select");
+  pick(group);persist();
+  notify("SVG наложен поверх рисунка. Перетащи или измени общий масштаб двумя пальцами / ползунком.");
+ }catch(e){fail(e);}
+}
 function eraseMask(){
  if(contentGroup&&contentGroup.isConnected&&maskId){
   var item=art.querySelector("mask#"+maskId);if(item)return item;
@@ -282,9 +384,14 @@ function drawShape(type){
  container().appendChild(el);pick(el);persist();setTool("select");
 }
 function findEditable(target){
- var el=target;
- while(el&&el!==art&&(!el.localName||!editTags.has(el.localName)))el=el.parentNode;
- return !el||el===art?null:el;
+ // Treat an imported SVG as one transformable vector group, never isolated children.
+ var el=target,insideOverlay=null,shape=null;
+ while(el&&el!==art){
+  if(el.getAttribute && el.getAttribute("data-vectora-overlay")==="true")insideOverlay=el;
+  else if(!shape&&el.localName&&editTags.has(el.localName))shape=el;
+  el=el.parentNode;
+ }
+ return insideOverlay||shape||null;
 }
 function renderCanvas(maxSide,maxArea){
  return new Promise(function(resolve,reject){
