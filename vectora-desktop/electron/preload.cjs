@@ -8,5 +8,5 @@ contextBridge.exposeInMainWorld("vectoraDesktop",Object.freeze({
   autosave:(source)=>ipcRenderer.invoke("vectora:autosave",source),
   restore:()=>ipcRenderer.invoke("vectora:restore"),
   platform:process.platform,
-  version:"0.5.0"
+  version:"0.5.1"
 }));
