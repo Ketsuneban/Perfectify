@@ -35,6 +35,11 @@ output{color:#a1dcd6;min-width:22px;text-align:right;font-size:11px}
 #selectedPanel{display:flex;align-items:center;gap:8px;overflow-x:auto;padding-top:8px}
 #selectedPanel span{color:#c4d2dd;font-size:12px;white-space:nowrap}
 #textValue{width:120px;max-width:30vw}
+#overlayControls{display:flex;align-items:center;gap:7px;flex:0 0 auto;min-width:0}
+#overlayScale{width:134px;min-width:75px}
+#overlayScaleValue{min-width:38px}
+#overlayControls button{min-height:31px;padding:6px 9px}
+@media(max-width:520px){#overlayScale{width:80px}}
 #status{font-size:11px;line-height:1.3;color:#9db3c6;padding-top:8px;min-height:21px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media(max-width:520px){.brand span{display:none}.brand strong{font-size:16px}.top-actions button{padding:8px}.properties{gap:5px 10px}.bottom{padding:6px 9px}input[type=range]{width:80px}}
 @media(max-height:570px){.top{padding:4px 8px}.tool-strip{padding:4px}.bottom{padding:4px 8px}.swatches{padding-top:4px}#selectedPanel{padding-top:3px}}
@@ -44,6 +49,7 @@ output{color:#a1dcd6;min-width:22px;text-align:right;font-size:11px}
 <div class="top-actions">
 <button id="newDoc">Новый</button>
 <button id="openDoc">Открыть</button>
+<button id="overlayDoc" class="primary" title="Добавить второй SVG поверх текущего">⊕ Наложить SVG</button>
 <button id="saveDoc" class="primary">SVG ↓</button>
 <button id="exportPng">PNG ↓</button>
 </div></header>
@@ -72,20 +78,23 @@ output{color:#a1dcd6;min-width:22px;text-align:right;font-size:11px}
 <div class="setting"><label for="toleranceInput">Допуск</label><input id="toleranceInput" type="range" min="0" max="65" value="20"><output id="toleranceOut">20</output></div>
 </div>
 <div class="swatches" id="swatches" aria-label="Палитра"></div>
-<div id="selectedPanel" hidden><span id="selectedName">Фигура</span><button id="applyColor">Покрасить</button><input id="textValue" type="text" maxlength="250" hidden placeholder="Текст"><button id="deleteShape" class="negative">Удалить</button></div>
+<div id="selectedPanel" hidden><span id="selectedName">Фигура</span><button id="applyColor">Покрасить</button><input id="textValue" type="text" maxlength="250" hidden placeholder="Текст"><div id="overlayControls" hidden><span>Масштаб</span><button id="scaleDown" title="Уменьшить пропорционально">−</button><input id="overlayScale" type="range" min="5" max="1000" step="1" value="100" aria-label="Пропорциональный масштаб SVG"><output id="overlayScaleValue">100%</output><button id="scaleUp" title="Увеличить пропорционально">+</button></div><button id="deleteShape" class="negative">Удалить</button></div>
 <div id="status" role="status">Выбери кисть и рисуй. Все новые линии остаются векторами.</div>
 </section></div>
 <input id="fileInput" type="file" accept=".svg,image/svg+xml" hidden>
+<input id="overlayFileInput" type="file" accept=".svg,image/svg+xml" hidden>
 <!-- VECTOR_FILL_SCRIPT -->
+<!-- VECTOR_OVERLAY_SCRIPT -->
 <script>
 (function(){"use strict";
 var ns="http://www.w3.org/2000/svg";
 var $=function(id){return document.getElementById(id);};
 var board=$("board"),art=$("art"),selected=null,drag=null,draw=null,mode="select",working=false;
 var undo=[],redo=[],maskId=null,contentGroup=null;
+var overlayTouches=new Map(),overlayGesture=null,overlayDrag=null;
 var ids={select:"selectTool",brush:"brushTool",bucket:"bucketTool",eyedrop:"eyedropTool",eraser:"eraserTool"};
 var allowedTags=new Set(["svg","g","defs","rect","circle","ellipse","line","polyline","polygon","path","text","tspan","linearGradient","radialGradient","stop","clipPath","mask","use","symbol","pattern","filter","feGaussianBlur","feOffset","feBlend","feComposite","feFlood","feColorMatrix","feMerge","feMergeNode","feComponentTransfer","feFuncR","feFuncG","feFuncB","feFuncA","feDropShadow"]);
-var allowedAttrs=new Set(["id","viewBox","width","height","x","y","x1","y1","x2","y2","cx","cy","r","rx","ry","d","points","transform","fill","fill-rule","fill-opacity","stroke","stroke-width","stroke-opacity","stroke-linecap","stroke-linejoin","stroke-dasharray","stroke-dashoffset","opacity","font-size","font-weight","font-family","text-anchor","dominant-baseline","offset","stop-color","stop-opacity","gradientUnits","gradientTransform","spreadMethod","clip-path","mask","href","preserveAspectRatio","display","color","vector-effect","role","filter","filterUnits","primitiveUnits","stdDeviation","dx","dy","in","in2","result","values","type","mode","operator","k1","k2","k3","k4","slope","intercept","amplitude","exponent","tableValues","flood-color","flood-opacity","patternUnits","patternContentUnits","patternTransform","refX","refY","maskUnits","maskContentUnits","data-vectora-content","data-mask-id","data-vectora-background"]);
+var allowedAttrs=new Set(["id","viewBox","width","height","x","y","x1","y1","x2","y2","cx","cy","r","rx","ry","d","points","transform","fill","fill-rule","fill-opacity","stroke","stroke-width","stroke-opacity","stroke-linecap","stroke-linejoin","stroke-dasharray","stroke-dashoffset","opacity","font-size","font-weight","font-family","text-anchor","dominant-baseline","offset","stop-color","stop-opacity","gradientUnits","gradientTransform","spreadMethod","clip-path","mask","href","preserveAspectRatio","display","color","vector-effect","role","filter","filterUnits","primitiveUnits","stdDeviation","dx","dy","in","in2","result","values","type","mode","operator","k1","k2","k3","k4","slope","intercept","amplitude","exponent","tableValues","flood-color","flood-opacity","patternUnits","patternContentUnits","patternTransform","refX","refY","maskUnits","maskContentUnits","data-vectora-content","data-mask-id","data-vectora-background","data-vectora-overlay","data-vectora-x","data-vectora-y","data-vectora-scale","data-vectora-base-scale","data-vectora-width","data-vectora-height"]);
 var styleProps=new Set(["fill","fill-opacity","fill-rule","stroke","stroke-width","stroke-opacity","stroke-linecap","stroke-linejoin","opacity","font-size","font-family","font-weight","text-anchor","stop-color","stop-opacity","display","filter"]);
 var editTags=new Set(["rect","circle","ellipse","line","polyline","polygon","path","text","use"]);
 function notify(s){$("status").textContent=s;}
@@ -97,14 +106,14 @@ function safeValue(value){
  return urls.every(function(u){return /^url\s*\(\s*['"]?#[a-zA-Z0-9_.:-]+['"]?\s*\)$/i.test(u);});
 }
 function sanitize(xml){
- if(typeof xml!=="string"||xml.length>2097152)throw Error("SVG больше 2 МиБ");
+ if(typeof xml!=="string"||xml.length>8388608)throw Error("SVG больше 8 МиБ");
  if(/<!DOCTYPE|<!ENTITY/i.test(xml))throw Error("DTD запрещены");
  var doc=new DOMParser().parseFromString(xml,"image/svg+xml");
  var root=doc.documentElement;
  if(doc.querySelector("parsererror")||!root||root.localName!=="svg"||root.namespaceURI!==ns)throw Error("Неверный SVG");
  var count=0;
  function walk(el){
-  if(++count>5500)throw Error("Слишком много SVG-объектов");
+  if(++count>12000)throw Error("Слишком много SVG-объектов");
   Array.from(el.attributes).forEach(function(a){
    var name=a.name,local=a.localName,value=a.value;
    if(name==="xmlns"||name==="xmlns:xlink")return;
@@ -151,12 +160,18 @@ function remember(){undo.push(snapshot());if(undo.length>30)undo.shift();redo=[]
 function clearSelection(){
  if(selected&&selected.isConnected)selected.removeAttribute("data-picked");
  selected=null;$("selectedPanel").hidden=true;$("textValue").hidden=true;
+ $("overlayControls").hidden=true;$("applyColor").hidden=false;
 }
 function pick(el){
  clearSelection();
  if(!el)return;
  selected=el;selected.setAttribute("data-picked","true");
- $("selectedPanel").hidden=false;$("selectedName").textContent="Выбрано: "+el.localName;
+ $("selectedPanel").hidden=false;
+ var isOverlay=el.getAttribute("data-vectora-overlay")==="true";
+ $("selectedName").textContent=isOverlay?"Наложенный SVG":"Выбрано: "+el.localName;
+ $("overlayControls").hidden=!isOverlay;
+ $("applyColor").hidden=isOverlay;
+ if(isOverlay)updateOverlayScaleUi(el);
  $("textValue").hidden=el.localName!=="text";
  if(el.localName==="text")$("textValue").value=el.textContent;
 }
@@ -166,7 +181,7 @@ function loadSvg(xml,reset){
   board.replaceChild(parsed,art);art=parsed;maskId=null;contentGroup=null;
   var g=art.querySelector('[data-vectora-content="true"]');
   if(g){contentGroup=g;maskId=g.getAttribute("data-mask-id");}
-  clearSelection();drag=null;draw=null;
+  clearSelection();drag=null;draw=null;overlayTouches.clear();overlayGesture=null;overlayDrag=null;
   if(reset!==false){undo=[];redo=[];}
   notify("SVG загружен. Редактирование остаётся векторным.");
   persist();
@@ -376,7 +391,7 @@ function downloadBlob(blob,name){
 function saveSvg(){
  try{
   var source=snapshot();
-  if(source.length>2097152)throw Error("SVG слишком большой для сохранения");
+  if(source.length>8388608)throw Error("SVG слишком большой для сохранения");
   if(window.AndroidBridge)AndroidBridge.saveSvg(source);
   else downloadBlob(new Blob([source],{type:"image/svg+xml;charset=utf-8"}),"drawing.svg");
   notify("SVG готов к сохранению — векторный формат сохранён.");
