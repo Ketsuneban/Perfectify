@@ -584,7 +584,7 @@ $("overlayDoc").onclick=function(){if(window.AndroidBridge)AndroidBridge.importO
 $("saveDoc").onclick=saveSvg;$("exportPng").onclick=exportPng;
 $("fileInput").onchange=function(){
  var file=this.files&&this.files[0];if(!file)return;
- if(file.size>2097152){fail("SVG больше 2 МиБ");return;}
+ if(file.size>8388608){fail("SVG больше 8 МиБ");return;}
  file.text().then(function(s){loadSvg(s);}).catch(fail);
  this.value="";
 };
