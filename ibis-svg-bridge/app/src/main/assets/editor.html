@@ -230,7 +230,7 @@ $("png").onclick=function(){
         var canvas=document.createElement("canvas");canvas.width=cw;canvas.height=ch;
         var ctx=canvas.getContext("2d");ctx.drawImage(img,0,0,cw,ch);
         if(window.AndroidBridge){AndroidBridge.sharePng(canvas.toDataURL("image/png"));notify("PNG готов: "+cw+" × "+ch);}
-        else{browserDownload(canvas.toDataURL("image/png"),"edited.png","text/plain");notify("PNG сохранён. Открой его через ibisPaint.");}
+        else{canvas.toBlob(function(png){if(png)browserDownload(png,"edited.png","image/png");},"image/png");notify("PNG сохранён. Открой его через ibisPaint.");}
       }catch(e){error("PNG: "+e.message);}
     };
     img.onerror=function(){URL.revokeObjectURL(url);error("Не удалось преобразовать SVG в PNG");};
