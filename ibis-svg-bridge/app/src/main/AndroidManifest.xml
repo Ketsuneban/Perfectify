@@ -1,19 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <queries>
-        <package android:name="jp.ne.ibis.ibispaintx.app" />
-    </queries>
     <application
-        android:label="SVG Bridge for ibisPaint"
+        android:label="Vectora SVG"
         android:icon="@android:drawable/ic_menu_edit"
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:usesCleartextTraffic="false"
         android:allowBackup="false">
-        <activity android:name=".MainActivity" android:exported="true">
+        <activity android:name=".MainActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|keyboardHidden">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -29,18 +25,5 @@
                 <data android:mimeType="image/svg+xml" />
             </intent-filter>
         </activity>
-        <service
-            android:name=".OverlayService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="User-requested floating SVG editor" />
-        </service>
-        <provider
-            android:name=".PngProvider"
-            android:authorities="dev.ketsuneban.ibissvgbridge.png"
-            android:exported="false"
-            android:grantUriPermissions="true" />
     </application>
 </manifest>
