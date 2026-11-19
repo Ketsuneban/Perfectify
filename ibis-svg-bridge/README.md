@@ -12,6 +12,7 @@
 - Save the edited file as **SVG** using Android's system save dialog.
 - Render the edited SVG to transparent **PNG** and share it to ibisPaint X using Android's official image-share flow.
 - Work fully offline; SVG files remain on the device.
+- Open `app/src/main/assets/editor.html` as a standalone browser editor (with file-picker, SVG, and PNG downloads) if an Android APK is not available.
 
 ## What it cannot do
 
@@ -31,6 +32,10 @@
 5. Open ibisPaint X through the main app. The SVG editor will remain as a draggable floating panel.
 6. Tap a shape and drag it, or use the color and shape controls.
 7. Use **Сохранить SVG** to save a separate editable SVG, or **PNG → ibis** and choose **ibisPaint X** in Android's Share sheet.
+
+## No-APK browser fallback
+
+Download `app/src/main/assets/editor.html` from this branch and open it in a recent desktop or Android browser. The editor can open SVG, modify shapes and paths, and download SVG/PNG without an Android application. Browser mode cannot display on top of ibisPaint or share to it directly; import the exported PNG manually.
 
 ## Build from source
 
