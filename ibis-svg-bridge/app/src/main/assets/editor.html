@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>SVG Bridge</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,"Roboto",sans-serif}
+*{box-sizing:border-box}body{margin:0;background:#141b29;color:#f4f7ff;font-size:13px}
+.toolbar{display:flex;gap:5px;padding:8px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid #334059}
+button{border:1px solid #465774;background:#29384c;color:#f6f9ff;border-radius:9px;padding:9px 12px;white-space:nowrap;font-size:12px;font-weight:600}
+button:active{background:#466280}.primary{background:#1a796f;border-color:#26a699}.danger{background:#693844}
+#board{position:relative;margin:8px;height:46vh;min-height:160px;max-height:420px;border:1px solid #4a5b75;border-radius:9px;overflow:hidden;background-color:#fff;background-image:linear-gradient(45deg,#eceef1 25%,transparent 25%),linear-gradient(-45deg,#eceef1 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#eceef1 75%),linear-gradient(-45deg,transparent 75%,#eceef1 75%);background-size:22px 22px;background-position:0 0,0 11px,11px -11px,-11px 0}
+#board svg{height:100%!important;width:100%!important;display:block;touch-action:none}
+[data-picked="true"]{filter:drop-shadow(0px 0px 3px #00a5fa)}
+.controls{padding:8px;display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.control{display:flex;align-items:center;gap:5px;min-width:0}
+.control label{white-space:nowrap;color:#bfcada;font-size:11px}
+.control input[type=color]{width:44px;min-width:44px;height:32px;padding:1px;border:1px solid #4b6177;background:transparent;border-radius:6px}
+.control input[type=number]{width:64px}
+.control input[type=text]{flex:1;min-width:0}
+input{background:#243347;color:#fff;border:1px solid #475a74;border-radius:7px;padding:7px;font-size:13px}
+.wide{grid-column:1/-1}
+#status{margin:2px 9px 9px;color:#a2b9d0;font-size:11px;min-height:18px}
+#picked{font-size:12px;color:#6ed8cf;margin:7px 9px 0}
+.note{font-size:10px;color:#95aabd;margin:0 9px 6px}
+</style>
+</head>
+<body>
+<div class="toolbar">
+<button id="open">Открыть</button>
+<button id="save" class="primary">Сохранить SVG</button>
+<button id="png" class="primary">PNG → ibis</button>
+<button id="undo">↶</button><button id="redo">↷</button>
+</div>
+<div class="toolbar">
+<button id="rect">▭ Фигура</button>
+<button id="circle">○ Круг</button>
+<button id="line">╱ Линия</button>
+<button id="text">T Текст</button>
+<button id="path">⌁ Контур</button>
+<button id="remove" class="danger">Удалить</button>
+</div>
+<div id="board">
+<svg id="art" xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600"></svg>
+</div>
+<div id="picked">Элемент не выбран</div>
+<div class="controls">
+  <div class="control"><label for="fill">Заливка</label><input id="fill" type="color" value="#4499aa"><label><input id="none" type="checkbox"> нет</label></div>
+  <div class="control"><label for="stroke">Обводка</label><input id="stroke" type="color" value="#17202d"></div>
+  <div class="control"><label for="width">Толщина</label><input id="width" type="number" value="2" min="0" max="100" step="0.5"></div>
+  <div class="control"><label>Выделение: нажми на фигуру</label></div>
+  <div class="control wide" id="textBox" hidden><label for="textValue">Текст</label><input id="textValue" type="text" maxlength="500"></div>
+  <div class="control wide" id="pathBox" hidden><label for="pathValue">Контур d</label><input id="pathValue" type="text" maxlength="20000"></div>
+</div>
+<p class="note">Перетаскивай элементы пальцем. SVG сохраняется отдельно; PNG импортируется в ibisPaint как изображение.</p>
+<div id="status" role="status">Готово. Выбери SVG или добавь фигуру.</div>
+<script>
+(function(){
+"use strict";
+var ns="http://www.w3.org/2000/svg";
+var board=document.getElementById("board");
+var art=document.getElementById("art");
+var selected=null,drag=null,history=[],future=[];
+var allowedTags=new Set(["svg","g","defs","rect","circle","ellipse","line","polyline","polygon","path","text","tspan","linearGradient","radialGradient","stop","clipPath","mask","use"]);
+var allowedAttrs=new Set(["id","viewBox","width","height","x","y","x1","y1","x2","y2","cx","cy","r","rx","ry","d","points","transform","fill","fill-rule","fill-opacity","stroke","stroke-width","stroke-opacity","stroke-linecap","stroke-linejoin","stroke-dasharray","stroke-dashoffset","opacity","font-size","font-weight","font-family","text-anchor","dominant-baseline","offset","stop-color","stop-opacity","gradientUnits","gradientTransform","spreadMethod","clip-path","mask","href","preserveAspectRatio","display","color","vector-effect","role"]);
+var styleProps=new Set(["fill","fill-opacity","fill-rule","stroke","stroke-width","stroke-opacity","stroke-linecap","stroke-linejoin","opacity","font-size","font-family","font-weight","text-anchor","stop-color","stop-opacity","display"]);
+var editTags=new Set(["rect","circle","ellipse","line","polyline","polygon","path","text","use"]);
+var $=function(id){return document.getElementById(id);};
+function notify(message){$("status").textContent=message;}
+function error(message){notify("Ошибка: "+message);}
+function svgString(){var clone=art.cloneNode(true);clone.removeAttribute("data-picked");clone.querySelectorAll("[data-picked]").forEach(function(el){el.removeAttribute("data-picked");});clone.setAttribute("xmlns",ns);return new XMLSerializer().serializeToString(clone);}
+function mark(){history.push(svgString());if(history.length>30)history.shift();future=[];}
+function safeValue(val){
+  if(/javascript:|data:|@import|expression\s*\(|[<>]/i.test(val))return false;
+  var urls=val.match(/url\s*\([^)]*\)/gi)||[];
+  return urls.every(function(u){return /^url\s*\(\s*['"]?#[a-zA-Z0-9_.:-]+['"]?\s*\)$/i.test(u);});
+}
+function cleanSvg(xml){
+  if(typeof xml!=="string" || xml.length>2097152)throw new Error("SVG слишком большой");
+  if(/<!DOCTYPE|<!ENTITY/i.test(xml))throw new Error("DTD и сущности запрещены");
+  var doc=new DOMParser().parseFromString(xml,"image/svg+xml");
+  if(doc.querySelector("parsererror") || !doc.documentElement || doc.documentElement.localName!=="svg" || doc.documentElement.namespaceURI!==ns)throw new Error("Неверный SVG");
+  var count=0;
+  function walk(el){
+    count++;if(count>5000)throw new Error("Слишком много элементов SVG");
+    Array.from(el.attributes).forEach(function(a){
+      var name=a.name,local=a.localName,value=a.value;
+      if(name==="xmlns" || name==="xmlns:xlink")return;
+      if(name==="style"){
+        var safe=a.value.split(";").map(function(part){
+          var ix=part.indexOf(":");if(ix<1)return "";
+          var key=part.slice(0,ix).trim().toLowerCase(),v=part.slice(ix+1).trim();
+          return styleProps.has(key)&&safeValue(v)?key+":"+v:"";
+        }).filter(Boolean).join(";");
+        if(safe)el.setAttribute("style",safe);else el.removeAttribute("style");
+      }else if(!allowedAttrs.has(local)||!safeValue(value)||(local==="href"&&!/^#[a-zA-Z0-9_.:-]+$/.test(value))){
+        el.removeAttribute(name);
+      }
+    });
+    Array.from(el.children).forEach(function(child){
+      if(child.namespaceURI!==ns||!allowedTags.has(child.localName)){child.remove();return;}
+      walk(child);
+    });
+  }
+  walk(doc.documentElement);
+  var root=document.importNode(doc.documentElement,true);
+  root.setAttribute("id","art");
+  if(!root.hasAttribute("viewBox")){
+    var w=parseFloat(root.getAttribute("width"))||800,h=parseFloat(root.getAttribute("height"))||600;
+    root.setAttribute("viewBox","0 0 "+Math.max(1,w)+" "+Math.max(1,h));
+  }
+  return root;
+}
+function clearSelection(){
+  if(selected&&selected.isConnected)selected.removeAttribute("data-picked");
+  selected=null;$("picked").textContent="Элемент не выбран";$("textBox").hidden=true;$("pathBox").hidden=true;
+}
+function color(hex,fallback){
+  if(/^#[a-f0-9]{6}$/i.test(hex||""))return hex;
+  if(/^#[a-f0-9]{3}$/i.test(hex||""))return "#"+hex[1]+hex[1]+hex[2]+hex[2]+hex[3]+hex[3];
+  return fallback;
+}
+function pick(el){
+  clearSelection();if(!el)return;
+  selected=el;selected.setAttribute("data-picked","true");
+  $("picked").textContent="Выбрано: <"+el.localName+">";
+  var fill=el.getAttribute("fill")||"#4499aa";
+  $("none").checked=fill==="none";
+  $("fill").value=color(fill,"#4499aa");
+  $("stroke").value=color(el.getAttribute("stroke"),"#17202d");
+  $("width").value=el.getAttribute("stroke-width")||"2";
+  $("textBox").hidden=el.localName!=="text";
+  $("pathBox").hidden=el.localName!=="path";
+  if(el.localName==="text")$("textValue").value=el.textContent;
+  if(el.localName==="path")$("pathValue").value=el.getAttribute("d")||"";
+}
+function loadSvg(xml,reset){
+  try{
+    var parsed=cleanSvg(xml);board.replaceChild(parsed,art);art=parsed;
+    clearSelection();drag=null;
+    if(reset!==false){history=[];future=[];}
+    notify("SVG загружен. Нажми на элемент, чтобы изменить его.");
+  }catch(ex){error(ex.message);}
+}
+function add(type){
+  mark();
+  var v=art.viewBox.baseVal,w=v.width||800,h=v.height||600;
+  var el=document.createElementNS(ns,type);
+  if(type==="rect"){el.setAttribute("x",w*.30);el.setAttribute("y",h*.28);el.setAttribute("width",w*.37);el.setAttribute("height",h*.29);el.setAttribute("rx",12);}
+  if(type==="circle"){el.setAttribute("cx",w*.50);el.setAttribute("cy",h*.50);el.setAttribute("r",Math.min(w,h)*.18);}
+  if(type==="line"){el.setAttribute("x1",w*.30);el.setAttribute("y1",h*.35);el.setAttribute("x2",w*.70);el.setAttribute("y2",h*.65);}
+  if(type==="text"){el.setAttribute("x",w*.28);el.setAttribute("y",h*.50);el.setAttribute("font-size",Math.min(w,h)*.09);el.textContent="Текст";}
+  if(type==="path"){el.setAttribute("d","M "+w*.25+" "+h*.6+" Q "+w*.5+" "+h*.15+" "+w*.75+" "+h*.6);}
+  el.setAttribute("fill",type==="line"||type==="path"?"none":"#4499aa");
+  el.setAttribute("stroke","#17202d");
+  el.setAttribute("stroke-width","3");
+  art.appendChild(el);pick(el);notify("Добавлен: "+type);
+}
+function screenPoint(ev,ref){
+  var p=art.createSVGPoint();p.x=ev.clientX;p.y=ev.clientY;
+  var matrix=ref.getScreenCTM();if(!matrix)return{x:0,y:0};
+  return p.matrixTransform(matrix.inverse());
+}
+artPointer();
+function artPointer(){
+  board.addEventListener("pointerdown",function(ev){
+    var target=ev.target;
+    if(target===art){clearSelection();return;}
+    while(target&&target!==art&&(!target.localName||!editTags.has(target.localName)))target=target.parentNode;
+    if(!target||target===art)return;
+    pick(target);
+    var parent=target.parentNode&&target.parentNode.getScreenCTM?target.parentNode:art;
+    drag={id:ev.pointerId,node:target,parent:parent,start:screenPoint(ev,parent),transform:target.getAttribute("transform")||""};
+    mark();try{board.setPointerCapture(ev.pointerId);}catch(_){}
+    ev.preventDefault();
+  });
+  board.addEventListener("pointermove",function(ev){
+    if(!drag||ev.pointerId!==drag.id)return;
+    var p=screenPoint(ev,drag.parent),dx=p.x-drag.start.x,dy=p.y-drag.start.y;
+    drag.node.setAttribute("transform",(drag.transform+" translate("+dx.toFixed(2)+" "+dy.toFixed(2)+")").trim());
+  });
+  function stop(){drag=null;}
+  board.addEventListener("pointerup",stop);board.addEventListener("pointercancel",stop);
+}
+function setAttr(name,value){
+  if(!selected)return;
+  mark();selected.setAttribute(name,String(value));notify("Изменено: "+name);
+}
+$("open").onclick=function(){if(window.AndroidBridge)AndroidBridge.openSvg();else error("Открытие доступно в Android-приложении");};
+$("save").onclick=function(){try{if(window.AndroidBridge)AndroidBridge.saveSvg(svgString());else error("Сохранение доступно в Android-приложении");}catch(e){error(e.message);}};
+$("rect").onclick=function(){add("rect");};$("circle").onclick=function(){add("circle");};
+$("line").onclick=function(){add("line");};$("text").onclick=function(){add("text");};
+$("path").onclick=function(){add("path");};
+$("remove").onclick=function(){if(!selected)return;mark();selected.remove();clearSelection();notify("Элемент удалён.");};
+$("fill").onchange=function(){setAttr("fill",this.value);$("none").checked=false;};
+$("none").onchange=function(){setAttr("fill",this.checked?"none":$("fill").value);};
+$("stroke").onchange=function(){setAttr("stroke",this.value);};
+$("width").onchange=function(){var n=parseFloat(this.value);if(Number.isFinite(n)&&n>=0&&n<=100)setAttr("stroke-width",n);};
+$("textValue").onchange=function(){if(selected&&selected.localName==="text"){mark();selected.textContent=this.value;notify("Текст обновлён.");}};
+$("pathValue").onchange=function(){if(selected&&selected.localName==="path"){setAttr("d",this.value);}};
+$("undo").onclick=function(){if(!history.length)return;future.push(svgString());loadSvg(history.pop(),false);notify("Отменено.");};
+$("redo").onclick=function(){if(!future.length)return;history.push(svgString());loadSvg(future.pop(),false);notify("Повторено.");};
+$("png").onclick=function(){
+  try{
+    var clone=art.cloneNode(true);clone.querySelectorAll("[data-picked]").forEach(function(n){n.removeAttribute("data-picked");});
+    clone.setAttribute("xmlns",ns);
+    var v=art.viewBox.baseVal,w=Math.max(1,v.width||800),h=Math.max(1,v.height||600);
+    var scale=Math.min(1,2300/w,2300/h,Math.sqrt(4000000/(w*h)));
+    var cw=Math.max(1,Math.round(w*scale)),ch=Math.max(1,Math.round(h*scale));
+    clone.setAttribute("width",cw);clone.setAttribute("height",ch);
+    var xml=new XMLSerializer().serializeToString(clone);
+    var blob=new Blob([xml],{type:"image/svg+xml;charset=utf-8"});
+    var url=URL.createObjectURL(blob);
+    var img=new Image();
+    img.onload=function(){
+      URL.revokeObjectURL(url);
+      try{
+        var canvas=document.createElement("canvas");canvas.width=cw;canvas.height=ch;
+        var ctx=canvas.getContext("2d");ctx.drawImage(img,0,0,cw,ch);
+        if(window.AndroidBridge){AndroidBridge.sharePng(canvas.toDataURL("image/png"));notify("PNG готов: "+cw+" × "+ch);}
+        else error("Передача PNG доступна в Android-приложении");
+      }catch(e){error("PNG: "+e.message);}
+    };
+    img.onerror=function(){URL.revokeObjectURL(url);error("Не удалось преобразовать SVG в PNG");};
+    img.src=url;
+  }catch(e){error(e.message);}
+};
+window.editor={loadSvg:loadSvg,showError:error};
+})();
+</script>
+</body>
+</html>
