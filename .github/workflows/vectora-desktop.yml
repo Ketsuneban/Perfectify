@@ -1,0 +1,84 @@
+name: Vectora SVG — Windows desktop
+
+on:
+  push:
+    branches: [feature/vectora-desktop]
+    paths:
+      - "vectora-desktop/**"
+      - ".github/workflows/vectora-desktop.yml"
+  pull_request:
+    paths:
+      - "vectora-desktop/**"
+      - ".github/workflows/vectora-desktop.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install dependencies
+        working-directory: vectora-desktop
+        run: npm install --no-audit --no-fund
+      - name: Validate vector editor
+        working-directory: vectora-desktop
+        run: npm test
+      - name: Create portable Windows EXE and NSIS installer
+        working-directory: vectora-desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npm run dist:win
+      - name: Upload Windows builds
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vectora-SVG-Windows-x64
+          path: vectora-desktop/dist/*.exe
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/vectora-desktop'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Vectora-SVG-Windows-x64
+          path: dist
+      - name: Publish Windows preview Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="vectora-desktop-v0.5.0"
+          test -n "$(find dist -maxdepth 1 -name '*.exe' -print -quit)"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release already exists: $TAG"
+            exit 0
+          fi
+          cat > notes.md <<'EOF'
+          # Vectora SVG Desktop v0.5.0 — preview
+
+          Standalone Windows 10/11 x64 SVG editor based on Vectora Android's SVG engine.
+
+          - Rebuilt desktop layout: artboard, layers panel, object inspector, toolbar.
+          - Native SVG open, overlay import, Save As, and PNG export dialogs.
+          - Mouse wheel canvas zoom with cursor anchor, Space/middle-button pan, Fit.
+          - Imported SVG: selection box and 4 corner resize handles (uniform aspect ratio), precise X/Y and width/height/scale fields, wheel or keyboard adjustments.
+          - Multiple vector SVG imports retain paths, gradients and local effects; no rasterization when editing or saving.
+          - Brush, flood fill, eyedropper, eraser (base layer only), shapes, text, undo/redo.
+
+          Downloads: Portable EXE (no installation) or Setup EXE (installer). Unsigned preview binaries may trigger Windows SmartScreen. Save work frequently and test with copies of important SVGs.
+          EOF
+          gh release create "$TAG" dist/*.exe --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" --title "Vectora SVG Desktop v0.5.0 (Windows)" \
+            --notes-file notes.md --prerelease
