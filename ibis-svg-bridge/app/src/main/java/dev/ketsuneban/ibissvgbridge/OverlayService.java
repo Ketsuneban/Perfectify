@@ -210,7 +210,7 @@ public final class OverlayService extends Service {
         handler.post(() -> {
             Intent intent = new Intent(OverlayService.this, MainActivity.class);
             intent.setAction(action);
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);
         });
     }
