@@ -1,0 +1,54 @@
+name: ibis SVG Bridge (Android)
+
+on:
+  push:
+    branches:
+      - feature/ibis-svg-bridge
+    paths:
+      - 'ibis-svg-bridge/**'
+      - '.github/workflows/ibis-svg-bridge.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify inline editor JavaScript syntax
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          html = Path('ibis-svg-bridge/app/src/main/assets/editor.html').read_text()
+          assert html.count('<script>') == 1 and html.count('</script>') == 1
+          Path('/tmp/ibis-svg-editor.js').write_text(html.split('<script>')[1].split('</script>')[0])
+          PY
+          node --check /tmp/ibis-svg-editor.js
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 35
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Assemble APK
+        run: gradle -p ibis-svg-bridge --no-daemon assembleDebug
+
+      - name: Upload Android debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ibis-svg-bridge-debug-apk
+          path: ibis-svg-bridge/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
