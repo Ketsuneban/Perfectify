@@ -1,4 +1,4 @@
-name: Vectora SVG (Android)
+name: Vectora SVG — standalone Android editor
 
 on:
   push:
@@ -79,27 +79,29 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          TAG="ibis-svg-bridge-v0.2.0"
+          TAG="vectora-svg-v0.3.0"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release already exists: $TAG"
             exit 0
           fi
           test -s dist/app-debug.apk
-          mv dist/app-debug.apk dist/ibis-svg-bridge-v0.2.0-debug.apk
+          mv dist/app-debug.apk dist/vectora-svg-v0.3.0-debug.apk
           cat > release-notes.md <<'EOF'
-          SVG Bridge for ibisPaint X — experimental Android preview.
+          Vectora SVG v0.3.0 — independent Android SVG drawing app (experimental preview).
           
+          - Full-screen standalone SVG editor, no ibisPaint dependency or overlay permission.
           - Freehand vector brush with adjustable color, opacity and thickness.
-          - Object/background fill tool.
+          - Connected-region flood fill, raster-sampled and vector-traced to SVG paths (with holes).
+          - Eyedropper color sampling; color wheel/picker, HEX, opacity and swatch palette.
           - Nondestructive SVG-mask eraser.
-          - Draggable floating editor over ibisPaint X.
-          - Save SVG and export transparent PNG for ibisPaint.
+          - Basic shapes, editable text, move/selection, undo/redo and autosave.
+          - Open/save SVG using Android document picker, optional PNG export.
           
-          NOTE: This is an unofficial, independent overlay companion app, NOT a plugin inside the official ibisPaint canvas. The fill tool is not a pixel flood fill. This APK is debug-signed for testing; install at your own risk. Original ibisPaint X is unmodified.
+          NOTE: This is a standalone Android app. SVGs remain vector documents. Region detection is raster-based but each successful bucket operation generates SVG path geometry rather than image data. Debug-signed APK for testing; not a store-ready production release.
           EOF
-          gh release create "$TAG" dist/ibis-svg-bridge-v0.2.0-debug.apk \
+          gh release create "$TAG" dist/vectora-svg-v0.3.0-debug.apk \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "SVG Bridge v0.2.0 (Android preview)" \
+            --title "Vectora SVG v0.3.0 — standalone editor" \
             --notes-file release-notes.md \
             --prerelease
