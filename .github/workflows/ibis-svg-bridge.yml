@@ -7,6 +7,10 @@ on:
     paths:
       - 'ibis-svg-bridge/**'
       - '.github/workflows/ibis-svg-bridge.yml'
+  pull_request:
+    paths:
+      - 'ibis-svg-bridge/**'
+      - '.github/workflows/ibis-svg-bridge.yml'
   workflow_dispatch:
 
 permissions:
