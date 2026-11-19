@@ -1,0 +1,61 @@
+{
+  "name": "vectora-svg-desktop",
+  "version": "0.5.0",
+  "private": true,
+  "description": "Vectora SVG standalone vector graphics editor for Windows",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test tests/*.test.cjs",
+    "dist:win": "electron-builder --win nsis portable --x64 --publish never"
+  },
+  "author": "Vectora contributors",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "electron": "45.4.1",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "dev.ketsuneban.vectora.desktop",
+    "productName": "Vectora SVG",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "renderer/**/*",
+      "vendor/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "compression": "normal",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "artifactName": "Vectora-SVG-Setup-${version}-${arch}.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    },
+    "portable": {
+      "artifactName": "Vectora-SVG-Portable-${version}-${arch}.${ext}"
+    }
+  }
+}
