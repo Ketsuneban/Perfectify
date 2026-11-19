@@ -33,9 +33,10 @@ jobs:
           PY
           node --check /tmp/ibis-svg-editor.js
           node --check ibis-svg-bridge/app/src/main/assets/vector-overlay.js
+          node --check ibis-svg-bridge/app/src/main/assets/vector-layers.js
 
       - name: Test contour-to-vector flood fill
-        run: node --test ibis-svg-bridge/tests/floodfill.test.cjs ibis-svg-bridge/tests/vector-overlay.test.cjs
+        run: node --test ibis-svg-bridge/tests/floodfill.test.cjs ibis-svg-bridge/tests/vector-overlay.test.cjs ibis-svg-bridge/tests/vector-layers.test.cjs
 
       - uses: actions/setup-java@v4
         with:
@@ -80,16 +81,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          TAG="vectora-svg-v0.4.0"
+          TAG="vectora-svg-v0.4.1"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release already exists: $TAG"
             exit 0
           fi
           test -s dist/app-debug.apk
-          mv dist/app-debug.apk dist/vectora-svg-v0.4.0-debug.apk
+          mv dist/app-debug.apk dist/vectora-svg-v0.4.1-debug.apk
           cat > release-notes.md <<'EOF'
-          Vectora SVG v0.4.0 — Android vector editor with multi-SVG overlay import (experimental preview).
+          Vectora SVG v0.4.1 — eraser layer ordering hotfix.
           
+          - Fix: imported SVG always renders above the base drawing/eraser SVG mask.
+          - Fix: automatically repair saved v0.4.0 projects with overlays nested in the masked base.
           - Import multiple SVG documents as separate selectable vector groups on top of the current artwork.\n          - Uniform scaling with two-finger pinch and 5–1000% size slider; touch drag without distortion.\n          - Internal gradient/clip/mask IDs are namespaced to prevent collisions.\n          - The merged document remains SVG, not a raster image.\n          - Full-screen standalone SVG editor, no ibisPaint dependency or overlay permission.
           - Freehand vector brush with adjustable color, opacity and thickness.
           - Connected-region flood fill, raster-sampled and vector-traced to SVG paths (with holes).
@@ -100,9 +103,9 @@ jobs:
           
           NOTE: This is a standalone Android app. SVGs remain vector documents. Region detection is raster-based but each successful bucket operation generates SVG path geometry rather than image data. Debug-signed APK for testing; not a store-ready production release.
           EOF
-          gh release create "$TAG" dist/vectora-svg-v0.4.0-debug.apk \
+          gh release create "$TAG" dist/vectora-svg-v0.4.1-debug.apk \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "Vectora SVG v0.4.0 — SVG overlays and proportional scaling" \
+            --title "Vectora SVG v0.4.1 — eraser below imported SVG" \
             --notes-file release-notes.md \
             --prerelease
