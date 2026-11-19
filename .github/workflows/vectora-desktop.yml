@@ -27,6 +27,13 @@ jobs:
       - name: Install dependencies
         working-directory: vectora-desktop
         run: npm install --no-audit --no-fund
+      - name: Verify JavaScript syntax
+        working-directory: vectora-desktop
+        run: |
+          node --check renderer/editor.js
+          node --check electron/main.cjs
+          node --check electron/preload.cjs
+          node --check vendor/desktop-transform.js
       - name: Validate vector editor
         working-directory: vectora-desktop
         run: npm test
@@ -59,14 +66,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG="vectora-desktop-v0.5.0"
+          TAG="vectora-desktop-v0.5.1"
           test -n "$(find dist -maxdepth 1 -name '*.exe' -print -quit)"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release already exists: $TAG"
             exit 0
           fi
           cat > notes.md <<'EOF'
-          # Vectora SVG Desktop v0.5.0 — preview
+          # Vectora SVG Desktop v0.5.1 — preview
 
           Standalone Windows 10/11 x64 SVG editor based on Vectora Android's SVG engine.
 
@@ -79,6 +86,11 @@ jobs:
 
           Downloads: Portable EXE (no installation) or Setup EXE (installer). Unsigned preview binaries may trigger Windows SmartScreen. Save work frequently and test with copies of important SVGs.
           EOF
+          # Label the early incomplete prototype so users choose the validated version.
+          gh release edit vectora-desktop-v0.5.0 --repo "$GITHUB_REPOSITORY" \
+            --title "Vectora SVG Desktop v0.5.0 — superseded (incomplete preview)" \
+            --notes "This early preview was packaged before the full desktop renderer and tests were finalized. Please use vectora-desktop-v0.5.1 instead." \
+            --prerelease || true
           gh release create "$TAG" dist/*.exe --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" --title "Vectora SVG Desktop v0.5.0 (Windows)" \
+            --target "$GITHUB_SHA" --title "Vectora SVG Desktop v0.5.1 (Windows)" \
             --notes-file notes.md --prerelease
