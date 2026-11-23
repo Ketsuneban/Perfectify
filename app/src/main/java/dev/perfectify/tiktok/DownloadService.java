@@ -39,6 +39,7 @@ public final class DownloadService extends Service {
 
     @Override public void onCreate() {
         super.onCreate();
+        QueueStore.recoverInterrupted(this);
         NotificationManager nm = getSystemService(NotificationManager.class);
         nm.createNotificationChannel(new NotificationChannel(CHANNEL, "Загрузки Perfectify",
                 NotificationManager.IMPORTANCE_LOW));
@@ -47,6 +48,7 @@ public final class DownloadService extends Service {
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
             cancelled = true;
+            if (!running.get()) stopSelf();
             return START_NOT_STICKY;
         }
         if (!running.compareAndSet(false, true)) return START_NOT_STICKY;

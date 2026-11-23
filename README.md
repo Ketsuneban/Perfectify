@@ -26,7 +26,7 @@ Run: gradle :app:assembleDebug
 
 GitHub Actions > Android APK builds on main and publishes the first successful APK as a prerelease.
 
-https://github.com/Ketsuneban/Perfectify/releases/tag/v0.1.0
+https://github.com/Ketsuneban/Perfectify/releases/tag/perfectify-v0.1.0
 
 ## Privacy and security
 

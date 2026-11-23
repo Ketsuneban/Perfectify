@@ -75,7 +75,6 @@ public final class MainActivity extends Activity {
         super.onCreate(state);
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
-        QueueStore.recoverInterrupted(this);
         buildScreen();
         if (state == null) browser.loadUrl(TIKTOK_HOME);
         else browser.loadUrl(state.getString("url", TIKTOK_HOME));

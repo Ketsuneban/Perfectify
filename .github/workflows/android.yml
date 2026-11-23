@@ -36,7 +36,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION="v0.1.0"
+          VERSION="perfectify-v0.1.0"
           if gh release view "$VERSION" >/dev/null 2>&1; then
             echo "Release already exists; leaving published APK unchanged."
           else
