@@ -7,5 +7,7 @@
         <item name="android:statusBarColor">#0B1018</item>
         <item name="android:navigationBarColor">#0B1018</item>
         <item name="android:windowBackground">#0B1018</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowSoftInputMode">adjustResize</item>
     </style>
 </resources>

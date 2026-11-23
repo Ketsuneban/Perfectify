@@ -30,20 +30,20 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Perfectify-0.2.0-debug
+          name: Perfectify-0.3.0-debug
           path: app/build/outputs/apk/debug/app-debug.apk
-      - name: Publish first preview release
+      - name: Publish versioned preview release
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION="perfectify-v0.2.0"
+          VERSION="perfectify-v0.3.0"
           if gh release view "$VERSION" >/dev/null 2>&1; then
             echo "Release already exists; leaving published APK unchanged."
           else
-            gh release create "$VERSION" app/build/outputs/apk/debug/app-debug.apk#Perfectify-0.2.0-debug.apk \
+            gh release create "$VERSION" app/build/outputs/apk/debug/app-debug.apk#Perfectify-0.3.0-debug.apk \
               --target "$GITHUB_SHA" \
-              --title "Perfectify v0.2.0 - Browser account sync" \
-              --notes "Тестовая сборка: вход на tiktok.com во встроенном браузере, синхронизация видимых разделов профиля, понравившихся и избранного (если вкладки доступны), импорт официального архива, очередь загрузок. Невозможно получить удалённые или недоступные аккаунту видео." \
+              --title "Perfectify v0.3.0 - Interface and browser fixes" \
+              --notes "Обновлённый интерфейс: системные отступы Android 15/16 и трёхкнопочная навигация, отдельные действия и встроенный браузер с поддержкой окон, файлов, ошибок и внешнего браузера для Google OAuth. Вход Google внутри WebView официально запрещён; авторизация Chrome не передаётся в Perfectify." \
               --prerelease
           fi

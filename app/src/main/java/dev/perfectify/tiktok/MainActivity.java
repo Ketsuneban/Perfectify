@@ -22,6 +22,11 @@ import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowInsets;
+import android.view.WindowManager;
+import android.widget.FrameLayout;
+import android.widget.ProgressBar;
+import android.graphics.Insets;
 import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -64,6 +69,10 @@ public final class MainActivity extends Activity {
     private TextView browserStatus;
     private TextView syncStatus;
     private AccountSync accountSync;
+    private TikTokBrowser webController;
+    private ProgressBar pageProgress;
+    private TextView queueCategoryLabel;
+    private int lastQueueSignature = Integer.MIN_VALUE;
     private TextView queueSummary;
     private Button browserTab;
     private Button queueTab;
@@ -81,6 +90,8 @@ public final class MainActivity extends Activity {
         super.onCreate(state);
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
+        getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+        if (Build.VERSION.SDK_INT >= 30) getWindow().setDecorFitsSystemWindows(false);
         buildScreen();
         if (state == null) browser.loadUrl(TIKTOK_HOME);
         else browser.loadUrl(state.getString("url", TIKTOK_HOME));
@@ -95,32 +106,55 @@ public final class MainActivity extends Activity {
     private void buildScreen() {
         root = column();
         root.setBackgroundColor(BG);
+        root.setFocusableInTouchMode(true);
         setContentView(root);
+
+        // Android 15+ enforces edge-to-edge at target SDK 35. Respect BOTH
+        // 3-button navigation and gesture navigation, including the IME.
+        if (Build.VERSION.SDK_INT >= 30) {
+            root.setOnApplyWindowInsetsListener((view, windowInsets) -> {
+                Insets bars = windowInsets.getInsets(
+                        WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+                Insets keyboard = windowInsets.getInsets(WindowInsets.Type.ime());
+                root.setPadding(bars.left, bars.top, bars.right,
+                        Math.max(bars.bottom, keyboard.bottom));
+                return WindowInsets.CONSUMED;
+            });
+            root.requestApplyInsets();
+        } else {
+            root.setFitsSystemWindows(true);
+        }
 
         LinearLayout titleBar = row();
         titleBar.setGravity(Gravity.CENTER_VERTICAL);
-        titleBar.setPadding(dp(17), dp(12), dp(16), dp(12));
-        root.addView(titleBar, new LinearLayout.LayoutParams(-1, dp(66)));
+        titleBar.setPadding(dp(20), dp(10), dp(16), dp(10));
+        root.addView(titleBar, new LinearLayout.LayoutParams(-1, dp(67)));
 
-        LinearLayout titles = column();
-        titleBar.addView(titles, new LinearLayout.LayoutParams(0, -2, 1));
-        TextView title = label("Perfectify", 23, TEXT, true);
-        titles.addView(title);
-        titles.addView(label("TikTok archive · preview 0.2.0", 11, MUTED, false));
-        Button mod = button("Мой профиль ↗", false, this::openMyProfile);
-        titleBar.addView(mod, new LinearLayout.LayoutParams(-2, dp(40)));
+        LinearLayout branding = column();
+        titleBar.addView(branding, new LinearLayout.LayoutParams(0, -2, 1));
+        TextView title = label("Perfectify", 24, TEXT, true);
+        title.setLetterSpacing(-0.035f);
+        branding.addView(title);
+        branding.addView(label("Личный архив TikTok  ·  v0.3", 11, MUTED, false));
 
-        LinearLayout tabs = row();
-        tabs.setPadding(dp(14), 0, dp(14), dp(8));
-        root.addView(tabs, new LinearLayout.LayoutParams(-1, dp(50)));
-        browserTab = button("Браузер TikTok", true, () -> showQueue(false));
-        queueTab = button("Очередь / ссылки", false, () -> showQueue(true));
-        LinearLayout.LayoutParams half = new LinearLayout.LayoutParams(0, dp(40), 1);
-        half.setMargins(dp(3), 0, dp(3), 0);
-        tabs.addView(browserTab, half);
-        LinearLayout.LayoutParams half2 = new LinearLayout.LayoutParams(0, dp(40), 1);
-        half2.setMargins(dp(3), 0, dp(3), 0);
-        tabs.addView(queueTab, half2);
+        Button profile = button("Профиль  ↗", false, this::openMyProfile);
+        titleBar.addView(profile, new LinearLayout.LayoutParams(-2, dp(40)));
+
+        LinearLayout selector = row();
+        selector.setGravity(Gravity.CENTER_VERTICAL);
+        selector.setPadding(dp(4), dp(4), dp(4), dp(4));
+        selector.setBackground(shape(PANEL, 16));
+        LinearLayout.LayoutParams selectorLp = new LinearLayout.LayoutParams(-1, dp(52));
+        selectorLp.setMargins(dp(16), 0, dp(16), dp(10));
+        root.addView(selector, selectorLp);
+        browserTab = button("◉  Аккаунт", true, () -> showQueue(false));
+        queueTab = button("↓  Загрузки", false, () -> showQueue(true));
+        LinearLayout.LayoutParams tabA = new LinearLayout.LayoutParams(0, -1, 1);
+        tabA.setMargins(dp(2), 0, dp(2), 0);
+        LinearLayout.LayoutParams tabB = new LinearLayout.LayoutParams(0, -1, 1);
+        tabB.setMargins(dp(2), 0, dp(2), 0);
+        selector.addView(browserTab, tabA);
+        selector.addView(queueTab, tabB);
 
         createBrowserPane();
         createQueuePane();
@@ -131,78 +165,147 @@ public final class MainActivity extends Activity {
         browserPane = column();
         root.addView(browserPane, new LinearLayout.LayoutParams(-1, 0, 1));
 
-        LinearLayout picker = row();
-        picker.setGravity(Gravity.CENTER_VERTICAL);
-        picker.setPadding(dp(15), dp(2), dp(15), dp(5));
-        browserPane.addView(picker, new LinearLayout.LayoutParams(-1, dp(36)));
-        categoryLabel = label("Категория: " + category, 13, BLUE, true);
-        picker.addView(categoryLabel, new LinearLayout.LayoutParams(0, -2, 1));
-        TextView tip = label("▼ выбрать", 12, MUTED, false);
-        picker.addView(tip);
-        picker.setOnClickListener(v -> chooseCategory());
+        LinearLayout quick = row();
+        quick.setGravity(Gravity.CENTER_VERTICAL);
+        quick.setPadding(dp(16), dp(3), dp(16), dp(6));
+        browserPane.addView(quick, new LinearLayout.LayoutParams(-1, dp(47)));
+        addMiniButton(quick, "‹", () -> {
+            if (webController.closePopup()) return;
+            if (browser.canGoBack()) browser.goBack();
+        });
+        addMiniButton(quick, "›", () -> { if (browser.canGoForward()) browser.goForward(); });
+        addMiniButton(quick, "⟳", () -> browser.reload());
+        addMiniButton(quick, "⌂", () -> browser.loadUrl(TIKTOK_HOME));
+        TextView host = label("  🔒  tiktok.com", 12, MUTED, true);
+        host.setGravity(Gravity.CENTER_VERTICAL);
+        host.setBackground(shape(PANEL, 12));
+        host.setPadding(dp(10), 0, dp(8), 0);
+        LinearLayout.LayoutParams hostLp = new LinearLayout.LayoutParams(0, dp(38), 1);
+        hostLp.setMargins(dp(5), 0, 0, 0);
+        quick.addView(host, hostLp);
 
-        browserStatus = label("Войди на tiktok.com в этом браузере, затем нажми «Синхронизировать аккаунт». TikTok You не требуется.", 11, MUTED, false);
-        browserStatus.setPadding(dp(16), 0, dp(16), dp(6));
+        LinearLayout scanMeta = row();
+        scanMeta.setGravity(Gravity.CENTER_VERTICAL);
+        scanMeta.setPadding(dp(16), 0, dp(16), dp(5));
+        browserPane.addView(scanMeta, new LinearLayout.LayoutParams(-1, dp(32)));
+        categoryLabel = label("◈  Категория: " + category + "  ▾", 12, BLUE, true);
+        categoryLabel.setGravity(Gravity.CENTER_VERTICAL);
+        scanMeta.addView(categoryLabel, new LinearLayout.LayoutParams(0, -1, 1));
+        categoryLabel.setOnClickListener(v -> chooseCategory());
+        TextView browserHint = label("Вход через TikTok", 11, MUTED, false);
+        scanMeta.addView(browserHint);
+
+        browserStatus = label("Войди на tiktok.com через доступный способ входа.", 11, MUTED, false);
+        browserStatus.setPadding(dp(18), 0, dp(18), dp(7));
+        browserStatus.setMaxLines(2);
         browserPane.addView(browserStatus);
-        syncStatus = label("Синхронизация не запущена", 12, BLUE, false);
-        syncStatus.setPadding(dp(16), 0, dp(16), dp(6));
-        browserPane.addView(syncStatus);
 
-        browser = new WebView(this);
-        browser.setBackgroundColor(BG);
-        browser.getSettings().setJavaScriptEnabled(true);
-        browser.getSettings().setDomStorageEnabled(true);
-        browser.getSettings().setAllowFileAccess(false);
-        browser.getSettings().setAllowContentAccess(false);
-        browser.getSettings().setMixedContentMode(android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        browser.getSettings().setMediaPlaybackRequiresUserGesture(true);
-        browser.getSettings().setSupportMultipleWindows(false);
-        CookieManager.getInstance().setAcceptCookie(true);
-        CookieManager.getInstance().setAcceptThirdPartyCookies(browser, false);
-        browser.setWebChromeClient(new WebChromeClient());
-        browser.setWebViewClient(new WebViewClient() {
-            @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                Uri target = request.getUrl();
-                if (!"https".equalsIgnoreCase(target.getScheme())) return true;
-                return false;
-            }
-            @Override public void onPageFinished(WebView view, String url) {
-                if (QueueStore.isTikTokUrl(url)) {
-                    browserStatus.setText("Открой доступный раздел своего профиля. Собираются только видео, показанные на странице.");
-                } else {
-                    browserStatus.setText("Встроенный браузер · внешний вход может быть ограничен TikTok");
-                }
+        pageProgress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        pageProgress.setIndeterminate(false);
+        pageProgress.setProgressTintList(android.content.res.ColorStateList.valueOf(BLUE));
+        pageProgress.setVisibility(View.INVISIBLE);
+        browserPane.addView(pageProgress, new LinearLayout.LayoutParams(-1, dp(2)));
+
+        FrameLayout browserHost = new FrameLayout(this);
+        browserHost.setBackground(shape(PANEL, 16));
+        browserHost.setClipToOutline(true);
+        LinearLayout.LayoutParams webLp = new LinearLayout.LayoutParams(-1, 0, 1);
+        webLp.setMargins(dp(12), 0, dp(12), dp(8));
+        browserPane.addView(browserHost, webLp);
+        webController = new TikTokBrowser(this, browserHost, pageProgress, browserStatus);
+        browser = webController.view();
+        webController.setAfterPageLoaded(() -> {
+            if (webController.view() != browser) {
+                if (accountSync != null && accountSync.isRunning()) accountSync.cancel();
+                browser = webController.view();
+                installAccountSync();
             }
         });
-        browserPane.addView(browser, new LinearLayout.LayoutParams(-1, 0, 1));
+        installAccountSync();
+
+        LinearLayout statusPanel = row();
+        statusPanel.setGravity(Gravity.CENTER_VERTICAL);
+        statusPanel.setPadding(dp(13), dp(7), dp(13), dp(7));
+        statusPanel.setBackground(shape(PANEL, 12));
+        LinearLayout.LayoutParams statusLp = new LinearLayout.LayoutParams(-1, dp(48));
+        statusLp.setMargins(dp(16), 0, dp(16), dp(9));
+        browserPane.addView(statusPanel, statusLp);
+        TextView dot = label("●  ", 11, GOOD, true);
+        statusPanel.addView(dot);
+        syncStatus = label("Готово к синхронизации", 12, MUTED, false);
+        syncStatus.setMaxLines(2);
+        syncStatus.setEllipsize(TextUtils.TruncateAt.END);
+        statusPanel.addView(syncStatus, new LinearLayout.LayoutParams(0, -2, 1));
+
+        LinearLayout dock = row();
+        dock.setGravity(Gravity.CENTER_VERTICAL);
+        dock.setPadding(dp(16), dp(6), dp(16), dp(9));
+        browserPane.addView(dock, new LinearLayout.LayoutParams(-1, dp(64)));
+        Button sync = button("◉  Синхронизировать", true, this::syncAccount);
+        LinearLayout.LayoutParams syncLp = new LinearLayout.LayoutParams(0, dp(47), 1);
+        syncLp.setMargins(0, 0, dp(8), 0);
+        dock.addView(sync, syncLp);
+        Button more = button("Действия  ⋯", false, this::showBrowserActions);
+        dock.addView(more, new LinearLayout.LayoutParams(dp(121), dp(47)));
+    }
+
+    private void installAccountSync() {
         accountSync = new AccountSync(this, browser, new AccountSync.Listener() {
-            @Override public void onStatus(String status) {
-                syncStatus.setText(status);
+            @Override public void onStatus(String state) {
+                if (syncStatus != null) syncStatus.setText(state);
             }
             @Override public void onFinished(int count, String summary) {
-                syncStatus.setText(summary);
+                if (syncStatus != null) syncStatus.setText(summary);
+                if (isFinishing()) return;
                 new AlertDialog.Builder(MainActivity.this)
-                    .setTitle("Синхронизация")
-                    .setMessage(summary + "\n\nОткрой вкладку «Очередь», чтобы скачать доступные ролики.")
-                    .setPositiveButton("Очередь", (dialog, which) -> showQueue(true))
-                    .setNegativeButton("ОК", null).show();
+                        .setTitle("Синхронизация")
+                        .setMessage(summary + "\n\nНайденные видео добавлены в очередь.")
+                        .setPositiveButton("Посмотреть очередь", (dialog, which) -> showQueue(true))
+                        .setNegativeButton("Готово", null).show();
             }
         });
+    }
 
-        HorizontalScrollView actionsScroll = new HorizontalScrollView(this);
-        actionsScroll.setHorizontalScrollBarEnabled(false);
-        browserPane.addView(actionsScroll, new LinearLayout.LayoutParams(-1, dp(57)));
-        LinearLayout actions = row();
-        actions.setPadding(dp(10), dp(7), dp(10), dp(7));
-        actionsScroll.addView(actions);
-        addButton(actions, "Синхронизировать аккаунт", true, this::syncAccount);
-        addButton(actions, "Сканировать раздел", false, this::syncCurrentSection);
-        addButton(actions, "Остановить синхр.", false, this::stopSync);
-        addButton(actions, "Импорт архива", false, this::openArchivePicker);
-        addButton(actions, "Захватить видео", false, this::captureCurrentVideo);
-        addButton(actions, "⌂", false, () -> browser.loadUrl(TIKTOK_HOME));
-        addButton(actions, "↻", false, () -> browser.reload());
-        addButton(actions, "Очистить вход", false, this::confirmLogout);
+    private void showBrowserActions() {
+        String[] options = {
+                "Сканировать открытый раздел",
+                "Импорт архива TikTok",
+                "Сохранить открытый ролик",
+                "Остановить синхронизацию",
+                "Открыть TikTok в обычном браузере",
+                "Помощь со входом Google",
+                "Очистить вход в Perfectify"
+        };
+        new AlertDialog.Builder(this)
+                .setTitle("Действия аккаунта")
+                .setItems(options, (dialog, which) -> {
+                    switch (which) {
+                        case 0: syncCurrentSection(); break;
+                        case 1: openArchivePicker(); break;
+                        case 2: captureCurrentVideo(); break;
+                        case 3: stopSync(); break;
+                        case 4: webController.openExternal("https://www.tiktok.com/login"); break;
+                        case 5: googleLoginHelp(); break;
+                        case 6: confirmLogout(); break;
+                    }
+                })
+                .setNegativeButton("Закрыть", null).show();
+    }
+
+    private void googleLoginHelp() {
+        new AlertDialog.Builder(this)
+                .setTitle("Почему вход Google не продолжается?")
+                .setMessage("Google запрещает OAuth-авторизацию через встроенный Android WebView. Внешний браузер поддерживает вход, но его cookies TikTok не передаются Perfectify.\n\nДля синхронизации через встроенный TikTok используй доступный вход по телефону, почте или другой способ. Если это невозможно, запроси официальный архив данных TikTok и импортируй его в Perfectify.")
+                .setNeutralButton("Импорт архива", (dialog, which) -> openArchivePicker())
+                .setPositiveButton("Понятно", null).show();
+    }
+
+    private void addMiniButton(LinearLayout container, String title, Runnable click) {
+        Button b = button(title, false, click);
+        b.setTextSize(20);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(39), dp(39));
+        lp.setMargins(0, 0, dp(5), 0);
+        container.addView(b, lp);
     }
 
     private void createQueuePane() {
@@ -210,87 +313,106 @@ public final class MainActivity extends Activity {
         root.addView(queuePane, new LinearLayout.LayoutParams(-1, 0, 1));
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
+        scroll.setVerticalScrollBarEnabled(false);
         queuePane.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         LinearLayout page = column();
-        page.setPadding(dp(15), dp(8), dp(15), dp(20));
+        page.setPadding(dp(16), dp(10), dp(16), dp(20));
         scroll.addView(page);
 
-        page.addView(label("Добавить видео", 19, TEXT, true));
-        TextView intro = label("Ссылки автоматически поступают после синхронизации профиля или импорта архива TikTok. Ручное добавление необязательно.", 13, MUTED, false);
-        intro.setPadding(0, dp(7), 0, dp(10));
+        TextView title = label("Моя медиатека", 22, TEXT, true);
+        page.addView(title);
+        TextView intro = label("Синхронизируй доступные видео или импортируй архив TikTok. Добавленные ссылки останутся на устройстве.", 13, MUTED, false);
+        intro.setPadding(0, dp(7), 0, dp(15));
         page.addView(intro);
 
-        LinearLayout choice = row();
-        choice.setGravity(Gravity.CENTER_VERTICAL);
-        page.addView(choice);
-        TextView choiceTitle = label("Сохранять в категорию: ", 13, MUTED, false);
-        choice.addView(choiceTitle);
-        TextView choiceValue = label(category + "  ▼", 13, BLUE, true);
-        choice.addView(choiceValue);
-        choice.setOnClickListener(v -> chooseCategory());
+        LinearLayout addCard = column();
+        addCard.setPadding(dp(14), dp(13), dp(14), dp(13));
+        addCard.setBackground(shape(PANEL, 17));
+        page.addView(addCard, new LinearLayout.LayoutParams(-1, -2));
+
+        addCard.addView(label("Добавление по ссылкам", 15, TEXT, true));
+        LinearLayout categoryRow = row();
+        categoryRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams catLp = new LinearLayout.LayoutParams(-1, dp(40));
+        addCard.addView(categoryRow, catLp);
+        queueCategoryLabel = label("◈  " + category + "   ▾", 13, BLUE, true);
+        queueCategoryLabel.setGravity(Gravity.CENTER_VERTICAL);
+        categoryRow.addView(queueCategoryLabel);
+        categoryRow.setOnClickListener(v -> chooseCategory());
 
         linksInput = new EditText(this);
         linksInput.setTextColor(TEXT);
         linksInput.setHintTextColor(MUTED);
-        linksInput.setTextSize(14);
-        linksInput.setMinLines(3);
-        linksInput.setMaxLines(6);
+        linksInput.setTextSize(13);
+        linksInput.setMinLines(2);
+        linksInput.setMaxLines(5);
         linksInput.setGravity(Gravity.TOP | Gravity.START);
-        linksInput.setHint("https://www.tiktok.com/@user/video/...\nhttps://vm.tiktok.com/...");
-        linksInput.setBackground(shape(PANEL, 14));
-        linksInput.setPadding(dp(14), dp(12), dp(14), dp(12));
+        linksInput.setHint("Вставь несколько ссылок tiktok.com…");
+        linksInput.setBackground(shape(PANEL2, 11));
+        linksInput.setPadding(dp(13), dp(12), dp(13), dp(12));
         LinearLayout.LayoutParams inputLp = new LinearLayout.LayoutParams(-1, -2);
-        inputLp.setMargins(0, dp(12), 0, dp(10));
-        page.addView(linksInput, inputLp);
+        inputLp.setMargins(0, dp(5), 0, dp(9));
+        addCard.addView(linksInput, inputLp);
 
-        HorizontalScrollView addScroll = new HorizontalScrollView(this);
-        addScroll.setHorizontalScrollBarEnabled(false);
-        page.addView(addScroll);
-        LinearLayout addActions = row();
-        addScroll.addView(addActions);
-        addButton(addActions, "Добавить ссылки", true, this::addInputLinks);
-        addButton(addActions, "Вставить", false, this::pasteClipboard);
-        addButton(addActions, "Повторить ошибки", false, () -> {
+        LinearLayout row = row();
+        addCard.addView(row, new LinearLayout.LayoutParams(-1, dp(43)));
+        Button add = button("Добавить", true, this::addInputLinks);
+        Button paste = button("Вставить", false, this::pasteClipboard);
+        LinearLayout.LayoutParams addLp = new LinearLayout.LayoutParams(0, -1, 1);
+        addLp.setMargins(0, 0, dp(8), 0);
+        row.addView(add, addLp);
+        row.addView(paste, new LinearLayout.LayoutParams(0, -1, 1));
+
+        LinearLayout queueHead = row();
+        queueHead.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams headLp = new LinearLayout.LayoutParams(-1, dp(56));
+        headLp.setMargins(0, dp(17), 0, 0);
+        page.addView(queueHead, headLp);
+        queueSummary = label("Очередь загрузок", 18, TEXT, true);
+        queueHead.addView(queueSummary, new LinearLayout.LayoutParams(0, -2, 1));
+        Button retry = button("Повторить", false, () -> {
             QueueStore.retryFailed(this);
+            lastQueueSignature = Integer.MIN_VALUE;
             renderQueue();
         });
-
-        View divider = new View(this);
-        divider.setBackgroundColor(Color.rgb(42, 54, 74));
-        LinearLayout.LayoutParams divLp = new LinearLayout.LayoutParams(-1, dp(1));
-        divLp.setMargins(0, dp(21), 0, dp(17));
-        page.addView(divider, divLp);
-
-        queueSummary = label("Очередь загрузок", 18, TEXT, true);
-        page.addView(queueSummary);
-        TextView warning = label("Скрытые или удалённые видео не открываются автоматически. Если TikTok не отдаёт видеофайл, будет показана ошибка.", 12, MUTED, false);
-        warning.setPadding(0, dp(7), 0, dp(10));
-        page.addView(warning);
+        queueHead.addView(retry, new LinearLayout.LayoutParams(dp(103), dp(38)));
 
         queueRows = column();
         page.addView(queueRows);
 
-        HorizontalScrollView controlsScroll = new HorizontalScrollView(this);
-        controlsScroll.setHorizontalScrollBarEnabled(false);
-        queuePane.addView(controlsScroll, new LinearLayout.LayoutParams(-1, dp(63)));
-        LinearLayout controls = row();
-        controls.setPadding(dp(10), dp(5), dp(10), dp(9));
-        controlsScroll.addView(controls);
-        addButton(controls, "▶ Скачать очередь", true, this::startQueue);
-        addButton(controls, "■ Стоп", false, this::stopQueue);
-        addButton(controls, "Очистить готовые", false, () -> {
-            QueueStore.clearCompleted(this);
-            renderQueue();
-        });
+        LinearLayout dock = row();
+        dock.setGravity(Gravity.CENTER_VERTICAL);
+        dock.setPadding(dp(16), dp(7), dp(16), dp(8));
+        queuePane.addView(dock, new LinearLayout.LayoutParams(-1, dp(68)));
+        Button start = button("↓  Скачать очередь", true, this::startQueue);
+        LinearLayout.LayoutParams startLp = new LinearLayout.LayoutParams(0, dp(48), 1);
+        startLp.setMargins(0, 0, dp(8), 0);
+        dock.addView(start, startLp);
+        Button stop = button("Стоп", false, this::stopQueue);
+        dock.addView(stop, new LinearLayout.LayoutParams(dp(76), dp(48)));
+        Button clear = button("⋯", false, () ->
+                new AlertDialog.Builder(this)
+                        .setTitle("Управление загрузками")
+                        .setItems(new String[]{"Очистить завершённые", "Повторить ошибки"},
+                                (dialog, which) -> {
+                                    if (which == 0) QueueStore.clearCompleted(this);
+                                    else QueueStore.retryFailed(this);
+                                    lastQueueSignature = Integer.MIN_VALUE;
+                                    renderQueue();
+                                }).show());
+        LinearLayout.LayoutParams clearLp = new LinearLayout.LayoutParams(dp(50), dp(48));
+        clearLp.setMargins(dp(8), 0, 0, 0);
+        dock.addView(clear, clearLp);
     }
 
     private void showQueue(boolean show) {
         queueVisible = show;
+        lastQueueSignature = Integer.MIN_VALUE;
         browserPane.setVisibility(show ? View.GONE : View.VISIBLE);
         queuePane.setVisibility(show ? View.VISIBLE : View.GONE);
-        browserTab.setBackground(shape(show ? PANEL2 : BLUE, 11));
+        browserTab.setBackground(shape(show ? PANEL : BLUE, 12));
         browserTab.setTextColor(show ? TEXT : BG);
-        queueTab.setBackground(shape(show ? BLUE : PANEL2, 11));
+        queueTab.setBackground(shape(show ? BLUE : PANEL, 12));
         queueTab.setTextColor(show ? BG : TEXT);
         if (show) renderQueue();
     }
@@ -301,7 +423,8 @@ public final class MainActivity extends Activity {
                 .setTitle("Категория локального архива")
                 .setSingleChoiceItems(options, indexOf(options, category), (dialog, which) -> {
                     category = options[which];
-                    categoryLabel.setText("Категория: " + category);
+                    categoryLabel.setText("◈  Категория: " + category + "  ▾");
+                    if (queueCategoryLabel != null) queueCategoryLabel.setText("◈  " + category + "   ▾");
                     dialog.dismiss();
                     if ("Избранное".equals(category) || "Понравившиеся".equals(category)
                             || "Коллекции".equals(category)) {
@@ -411,6 +534,7 @@ public final class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (webController != null && webController.handleFileResult(requestCode, resultCode, data)) return;
         if (requestCode != REQUEST_ARCHIVE || resultCode != RESULT_OK ||
                 data == null || data.getData() == null) return;
         Uri file = data.getData();
@@ -499,6 +623,15 @@ public final class MainActivity extends Activity {
     private void renderQueue() {
         if (queueRows == null) return;
         List<QueueStore.Entry> all = QueueStore.list(this);
+        int fingerprint = all.size();
+        for (QueueStore.Entry entry : all) {
+            fingerprint = fingerprint * 31 + (entry.id == null ? 0 : entry.id.hashCode());
+            fingerprint = fingerprint * 31 + (entry.state == null ? 0 : entry.state.hashCode());
+            fingerprint = fingerprint * 31 + entry.progress;
+            fingerprint = fingerprint * 31 + (entry.error == null ? 0 : entry.error.hashCode());
+        }
+        if (lastQueueSignature == fingerprint) return;
+        lastQueueSignature = fingerprint;
         queueRows.removeAllViews();
         int pending = 0, done = 0, errors = 0;
         for (QueueStore.Entry e : all) {
@@ -519,7 +652,7 @@ public final class MainActivity extends Activity {
             QueueStore.Entry item = all.get(i);
             LinearLayout card = column();
             card.setPadding(dp(12), dp(10), dp(12), dp(10));
-            card.setBackground(shape(PANEL, 12));
+            card.setBackground(shape(PANEL, 14));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
             lp.setMargins(0, dp(5), 0, dp(5));
             queueRows.addView(card, lp);
@@ -614,16 +747,27 @@ public final class MainActivity extends Activity {
     }
 
     @Override public void onBackPressed() {
+        if (webController != null && webController.closePopup()) return;
         if (queueVisible) { showQueue(false); return; }
         if (browser.canGoBack()) browser.goBack();
         else super.onBackPressed();
+    }
+
+    @Override protected void onPause() {
+        if (webController != null) webController.onPause();
+        super.onPause();
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        if (webController != null) webController.onResume();
     }
 
     @Override protected void onDestroy() {
         handler.removeCallbacks(queueRefresh);
         if (accountSync != null && accountSync.isRunning()) accountSync.cancel();
         importExecutor.shutdownNow();
-        browser.destroy();
+        if (webController != null) webController.destroy();
         super.onDestroy();
     }
 
@@ -656,7 +800,7 @@ public final class MainActivity extends Activity {
         result.setMinWidth(0);
         result.setMinimumWidth(0);
         result.setPadding(dp(12), 0, dp(12), 0);
-        result.setBackground(shape(primary ? BLUE : PANEL2, 11));
+        result.setBackground(shape(primary ? BLUE : PANEL2, 12));
         result.setOnClickListener(v -> click.run());
         return result;
     }
@@ -670,6 +814,7 @@ public final class MainActivity extends Activity {
         GradientDrawable shape = new GradientDrawable();
         shape.setColor(color);
         shape.setCornerRadius(dp(radiusDp));
+        if (color != BLUE) shape.setStroke(dp(1), Color.rgb(47, 59, 77));
         return shape;
     }
     private int dp(int value) {
