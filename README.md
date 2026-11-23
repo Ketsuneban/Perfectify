@@ -1,33 +1,51 @@
-# Perfectify — TikTok archive companion (Android)
+# Perfectify — персональный клиент-архив TikTok для Android
 
-Android preview app for organizing and saving videos you are authorized to access. Designed to work alongside the unofficial TikTok You Android modification by accepting shared TikTok links.
+## v0.2.0: аккаунт внутри Perfectify, без «Поделиться»
 
-## Preview v0.1.0
+Perfectify открывает **обычный сайт TikTok (tiktok.com)** во встроенном браузере Android и использует его собственную сессию. **TikTok You устанавливать или подключать к Perfectify не требуется.** Авторизация через мод также не переносится автоматически, так как Android изолирует данные приложений.
 
-- Built-in TikTok WebView with independent sign-in. Some login providers and TikTok itself may block embedded browsers.
-- Android Share > Perfectify accepts TikTok video links from TikTok You or browsers.
-- Paste a list of links, deduplicate, categorize (favorites, liked, collections, reposts, profile, links).
-- Collect the links currently visible on a web TikTok page. This does not crawl inaccessible hidden tabs or an entire infinite-scroll profile.
-- Capture a direct playable video URL when the current TikTok web page exposes one.
-- Foreground-service queue with progress, notification, stop, retry and local output via MediaStore in Movies/Perfectify TikTok.
-- Best-effort page-based resolution. TikTok may require cookies, serve temporary URLs or change page format. Failed items display an error.
+1. Открой Perfectify и авторизуйся на tiktok.com в его браузере.
+2. Перейди в **свой профиль** и нажми **«Синхронизировать аккаунт»**.
+3. Perfectify пытается последовательно открыть вкладки публикаций, понравившихся, избранного и репостов **через элементы веб-интерфейса**, пролистывает загруженную ленту и собирает доступные ссылки на видео.
+4. Ссылки автоматически поступают в локальную очередь с категориями. Открой «Очередь» и начни загрузку.
+5. Для отдельной веб-вкладки есть «Сканировать раздел» и «Остановить синхр.». Если TikTok не показывает нужный раздел в браузере, выбери «Импорт архива».
 
-## Important limitations
+### Важная оговорка
 
-- TikTok You's account session, cookies and private app data cannot be transferred into Perfectify under Android's app isolation. Sign in to TikTok website in Perfectify separately if its WebView login is supported.
-- Categories are labels for your archive. They do not automatically unlock TikTok's favorites/likes API. Navigate your own available pages manually, then collect visible links.
-- This preview does not emulate a TikTok device, access inaccessible hidden/removed content, or bypass restrictions.
-- Debug-signed APK is for personal testing, not a store-ready production release.
+Это **best-effort** импорт из отображаемого TikTok: он не гарантирует, что TikTok покажет в браузере все лайки, избранное, коллекции и истории просмотров, что каждая вкладка откроется или что каждый ролик можно будет скачать. Частные и удалённые видео, к которым у аккаунта нет доступа, не извлекаются.
 
-## Build
+Для получения списка категорий, которые TikTok не показывает через сайт, используй функцию **«Скачать ваши данные»** в настройках TikTok. Perfectify может **локально импортировать ZIP, JSON или TXT** экспорт, найти в нём ссылки на TikTok-видео и разложить их по категориям «Избранное», «Понравившиеся», «Профиль», «Репосты» и «История» на основе названий полей и файлов. Он не отправляет архив на сервер и не импортирует пароли или личные сообщения. Экспорт содержит прежде всего сведения и URL, а не медиакопии всех понравившихся роликов.
 
-Requires Android SDK API 35, JDK 17, Gradle 8.9.
-Run: gradle :app:assembleDebug
+## Поддерживается
 
-GitHub Actions > Android APK builds on main and publishes the first successful APK as a prerelease.
+- Android 8.0+ (API 26+) и отдельная авторизация через обычный сайт TikTok.
+- Автоматический проход по **доступным** разделам открытого личного профиля, виртуальный скролл, защита от повторного добавления.
+- Импорт TikTok data export (ZIP/JSON/TXT), исключительно локальная обработка.
+- Сканирование открытой вкладки и прямой захват ссылки на открытый видеопоток, если сайт его предоставляет.
+- Очередь, повтор ошибок, уведомление, остановка, сохранение доступных MP4 в Movies/Perfectify TikTok.
+- Дополнительная ручная вставка ссылок, если потребуется.
 
-https://github.com/Ketsuneban/Perfectify/releases/tag/perfectify-v0.1.0
+### Не реализовано
 
-## Privacy and security
+- Неограниченный доступ ко всем данным TikTok только по факту авторизации в WebView.
+- Маскировка APK под официальное устройство, извлечение cookies из TikTok You, обход закрытых видео или скачивание удалённого контента.
+- Официальный Data Portability API (его поддержка требует одобрения TikTok и применима к пользователям ЕЭЗ и Великобритании).
+- Автоматическое подтверждение, что TikTok даёт загрузить каждый ролик: часть видео не имеет доступного адреса или доступ ограничен.
 
-No Perfectify backend, password collection, credential extraction or analytics. TikTok login occurs only on TikTok-owned pages in the isolated in-app WebView. Queue and cookies remain in Android app storage. Video files are written to the local gallery. The WebView session can be cleared from the app.
+TikTok может заблокировать вход во встроенном Android WebView. Если это происходит, войди через доступный способ на TikTok, запроси официальный экспорт данных и импортируй его. Сессия Chrome не может просто передать свои cookies в WebView.
+
+## Сборка
+
+Требования: JDK 17, Android SDK API 35, Gradle 8.9.
+
+    gradle :app:assembleDebug
+
+GitHub Actions собирает debug APK после коммита в main и публикует тестовый релиз:
+
+https://github.com/Ketsuneban/Perfectify/releases/tag/perfectify-v0.2.0
+
+Debug APK предназначен для личного тестирования; для стабильной подписи потребуется постоянный ключ и тестирование на реальном устройстве.
+
+## Безопасность данных
+
+Нет собственного бэкенда, аналитики или сбора паролей. Вход выполняется на сайте TikTok во встроенном WebView, его cookies изолированы от TikTok You. Очередь остаётся в хранилище Android. Файлы сохраняются локально. Импорт архивов происходит полностью на устройстве с ограничениями размера. Cookies WebView можно очистить в интерфейсе.

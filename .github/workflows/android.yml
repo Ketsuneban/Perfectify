@@ -30,20 +30,20 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Perfectify-0.1.0-debug
+          name: Perfectify-0.2.0-debug
           path: app/build/outputs/apk/debug/app-debug.apk
       - name: Publish first preview release
         if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION="perfectify-v0.1.0"
+          VERSION="perfectify-v0.2.0"
           if gh release view "$VERSION" >/dev/null 2>&1; then
             echo "Release already exists; leaving published APK unchanged."
           else
-            gh release create "$VERSION" app/build/outputs/apk/debug/app-debug.apk#Perfectify-0.1.0-debug.apk \
+            gh release create "$VERSION" app/build/outputs/apk/debug/app-debug.apk#Perfectify-0.2.0-debug.apk \
               --target "$GITHUB_SHA" \
-              --title "Perfectify v0.1.0 - Android preview" \
-              --notes "Первый тестовый APK. Браузер TikTok, приём ссылок из TikTok You, список загрузок и сохранение доступных видео. Скрытые и удалённые ролики недоступны. Debug-сборка для личного тестирования." \
+              --title "Perfectify v0.2.0 - Browser account sync" \
+              --notes "Тестовая сборка: вход на tiktok.com во встроенном браузере, синхронизация видимых разделов профиля, понравившихся и избранного (если вкладки доступны), импорт официального архива, очередь загрузок. Невозможно получить удалённые или недоступные аккаунту видео." \
               --prerelease
           fi

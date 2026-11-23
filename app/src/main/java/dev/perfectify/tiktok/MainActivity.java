@@ -7,6 +7,8 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -48,6 +50,8 @@ public final class MainActivity extends Activity {
     private static final int ERROR = Color.rgb(248, 139, 139);
     private static final int GOOD = Color.rgb(143, 223, 181);
     private static final String TIKTOK_HOME = "https://www.tiktok.com/";
+    private static final int REQUEST_ARCHIVE = 810;
+    private final ExecutorService importExecutor = Executors.newSingleThreadExecutor();
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private LinearLayout root;
@@ -58,6 +62,8 @@ public final class MainActivity extends Activity {
     private EditText linksInput;
     private TextView categoryLabel;
     private TextView browserStatus;
+    private TextView syncStatus;
+    private AccountSync accountSync;
     private TextView queueSummary;
     private Button browserTab;
     private Button queueTab;
@@ -100,8 +106,8 @@ public final class MainActivity extends Activity {
         titleBar.addView(titles, new LinearLayout.LayoutParams(0, -2, 1));
         TextView title = label("Perfectify", 23, TEXT, true);
         titles.addView(title);
-        titles.addView(label("TikTok archive · preview 0.1.0", 11, MUTED, false));
-        Button mod = button("TikTok You ↗", false, this::launchTikTokYou);
+        titles.addView(label("TikTok archive · preview 0.2.0", 11, MUTED, false));
+        Button mod = button("Мой профиль ↗", false, this::openMyProfile);
         titleBar.addView(mod, new LinearLayout.LayoutParams(-2, dp(40)));
 
         LinearLayout tabs = row();
@@ -135,9 +141,12 @@ public final class MainActivity extends Activity {
         picker.addView(tip);
         picker.setOnClickListener(v -> chooseCategory());
 
-        browserStatus = label("Войди в свой аккаунт на сайте TikTok. Сессия TikTok You не импортируется.", 11, MUTED, false);
+        browserStatus = label("Войди на tiktok.com в этом браузере, затем нажми «Синхронизировать аккаунт». TikTok You не требуется.", 11, MUTED, false);
         browserStatus.setPadding(dp(16), 0, dp(16), dp(6));
         browserPane.addView(browserStatus);
+        syncStatus = label("Синхронизация не запущена", 12, BLUE, false);
+        syncStatus.setPadding(dp(16), 0, dp(16), dp(6));
+        browserPane.addView(syncStatus);
 
         browser = new WebView(this);
         browser.setBackgroundColor(BG);
@@ -166,6 +175,19 @@ public final class MainActivity extends Activity {
             }
         });
         browserPane.addView(browser, new LinearLayout.LayoutParams(-1, 0, 1));
+        accountSync = new AccountSync(this, browser, new AccountSync.Listener() {
+            @Override public void onStatus(String status) {
+                syncStatus.setText(status);
+            }
+            @Override public void onFinished(int count, String summary) {
+                syncStatus.setText(summary);
+                new AlertDialog.Builder(MainActivity.this)
+                    .setTitle("Синхронизация")
+                    .setMessage(summary + "\n\nОткрой вкладку «Очередь», чтобы скачать доступные ролики.")
+                    .setPositiveButton("Очередь", (dialog, which) -> showQueue(true))
+                    .setNegativeButton("ОК", null).show();
+            }
+        });
 
         HorizontalScrollView actionsScroll = new HorizontalScrollView(this);
         actionsScroll.setHorizontalScrollBarEnabled(false);
@@ -173,7 +195,10 @@ public final class MainActivity extends Activity {
         LinearLayout actions = row();
         actions.setPadding(dp(10), dp(7), dp(10), dp(7));
         actionsScroll.addView(actions);
-        addButton(actions, "Собрать ссылки", true, this::collectVisibleLinks);
+        addButton(actions, "Синхронизировать аккаунт", true, this::syncAccount);
+        addButton(actions, "Сканировать раздел", false, this::syncCurrentSection);
+        addButton(actions, "Остановить синхр.", false, this::stopSync);
+        addButton(actions, "Импорт архива", false, this::openArchivePicker);
         addButton(actions, "Захватить видео", false, this::captureCurrentVideo);
         addButton(actions, "⌂", false, () -> browser.loadUrl(TIKTOK_HOME));
         addButton(actions, "↻", false, () -> browser.reload());
@@ -191,7 +216,7 @@ public final class MainActivity extends Activity {
         scroll.addView(page);
 
         page.addView(label("Добавить видео", 19, TEXT, true));
-        TextView intro = label("Вставь несколько ссылок TikTok или отправь ролики через «Поделиться» из TikTok You.", 13, MUTED, false);
+        TextView intro = label("Ссылки автоматически поступают после синхронизации профиля или импорта архива TikTok. Ручное добавление необязательно.", 13, MUTED, false);
         intro.setPadding(0, dp(7), 0, dp(10));
         page.addView(intro);
 
@@ -305,6 +330,113 @@ public final class MainActivity extends Activity {
         if (clip == null || clip.getItemCount() == 0) { toast("Буфер пуст"); return; }
         CharSequence value = clip.getItemAt(0).coerceToText(this);
         if (value != null) linksInput.append(value);
+    }
+
+    private void syncAccount() {
+        if (accountSync != null && accountSync.isRunning()) {
+            toast("Синхронизация уже выполняется");
+            return;
+        }
+        if (!QueueStore.isTikTokUrl(browser.getUrl())) {
+            toast("Сначала войди в TikTok во встроенном браузере");
+            return;
+        }
+        String url = browser.getUrl();
+        if (url != null && url.matches("https://[^/]*tiktok\\.com/@[^/?#]+/?([?#].*)?")) {
+            accountSync.startProfile();
+            return;
+        }
+        // Discover the signed-in user's own profile via a visible navigation link.
+        String js = "(function(){let e=document.querySelector('a[data-e2e=\"profile-icon\"]')"
+            + "||document.querySelector('[data-e2e=\"profile-icon\"] a')"
+            + "||document.querySelector('nav a[aria-label=\"Profile\"]')"
+            + "||document.querySelector('nav a[aria-label=\"Профиль\"]');"
+            + "let href=e&&e.href?e.href:(e&&e.closest('a')?e.closest('a').href:'');"
+            + "return href||'';})()";
+        browser.evaluateJavascript(js, value -> {
+            try {
+                String link = decodeJS(value);
+                if (link.matches("https://[^/]*tiktok\\.com/@[^/?#]+/?([?#].*)?")) {
+                    browser.loadUrl(link);
+                    syncStatus.setText("Открываю профиль…");
+                    handler.postDelayed(() -> accountSync.startProfile(), 3300);
+                } else {
+                    new AlertDialog.Builder(this)
+                        .setTitle("Открой свой профиль")
+                        .setMessage("TikTok не показал ссылку на твой аккаунт. Нажми «Профиль» внутри TikTok и затем «Синхронизировать аккаунт». Отправлять видео через «Поделиться» не нужно.")
+                        .setPositiveButton("Понятно", null).show();
+                }
+            } catch (Exception e) {
+                toast("Не удалось найти профиль. Открой его в TikTok.");
+            }
+        });
+    }
+
+    private void openMyProfile() {
+        String js = "(function(){let e=document.querySelector('a[data-e2e=\"profile-icon\"]')"
+                + "||document.querySelector('[data-e2e=\"profile-icon\"] a')"
+                + "||document.querySelector('nav a[aria-label=\"Profile\"]')"
+                + "||document.querySelector('nav a[aria-label=\"Профиль\"]');"
+                + "return e?(e.href||(e.closest('a')?e.closest('a').href:'')):'';})()";
+        browser.evaluateJavascript(js, result -> {
+            try {
+                String url = decodeJS(result);
+                if (QueueStore.isTikTokUrl(url) && url.contains("/@")) browser.loadUrl(url);
+                else toast("Открой «Профиль» непосредственно в TikTok.");
+            } catch (Exception e) { toast("Ссылка на профиль пока недоступна"); }
+        });
+    }
+
+    private void syncCurrentSection() {
+        if (accountSync == null || accountSync.isRunning()) {
+            toast("Синхронизация уже выполняется");
+            return;
+        }
+        accountSync.startCurrent(category);
+    }
+
+    private void stopSync() {
+        if (accountSync != null && accountSync.isRunning()) accountSync.cancel();
+        else toast("Активной синхронизации нет");
+    }
+
+    private void openArchivePicker() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.setType("*/*");
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.putExtra(Intent.EXTRA_MIME_TYPES,
+                new String[]{"application/zip","application/json","text/plain","application/octet-stream"});
+        startActivityForResult(intent, REQUEST_ARCHIVE);
+    }
+
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQUEST_ARCHIVE || resultCode != RESULT_OK ||
+                data == null || data.getData() == null) return;
+        Uri file = data.getData();
+        toast("Читаю архив локально…");
+        importExecutor.execute(() -> {
+            try {
+                ArchiveImporter.Result result = ArchiveImporter.importFrom(
+                        getApplicationContext(), file);
+                runOnUiThread(() -> {
+                    String msg = "Обработано файлов: " + result.files
+                            + "\nСсылок: " + result.links
+                            + "\nДобавлено видео: " + result.added
+                            + "\nПропущено файлов: " + result.skipped;
+                    new AlertDialog.Builder(this)
+                        .setTitle("Импорт данных TikTok")
+                        .setMessage(msg)
+                        .setPositiveButton("Открыть очередь", (dialog, which) -> showQueue(true))
+                        .setNegativeButton("ОК", null).show();
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> new AlertDialog.Builder(this)
+                    .setTitle("Ошибка импорта")
+                    .setMessage(e.getMessage())
+                    .setPositiveButton("ОК", null).show());
+            }
+        });
     }
 
     private void collectVisibleLinks() {
@@ -489,6 +621,8 @@ public final class MainActivity extends Activity {
 
     @Override protected void onDestroy() {
         handler.removeCallbacks(queueRefresh);
+        if (accountSync != null && accountSync.isRunning()) accountSync.cancel();
+        importExecutor.shutdownNow();
         browser.destroy();
         super.onDestroy();
     }
