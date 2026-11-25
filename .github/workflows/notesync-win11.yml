@@ -1,0 +1,30 @@
+name: NoteSync Windows
+on:
+  push:
+    branches: [notesync-win11]
+    paths:
+      - 'NoteSync/**'
+      - '.github/workflows/notesync-win11.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Publish standalone executable
+        run: dotnet publish NoteSync/NoteSync.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o dist
+      - name: Verify numbering parser
+        shell: pwsh
+        run: |
+          $process = Start-Process -FilePath (Join-Path $PWD 'dist/NoteSync.exe') -ArgumentList '--self-test' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Parser self-test failed" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NoteSync-Windows-x64
+          path: dist/NoteSync.exe
+          if-no-files-found: error
