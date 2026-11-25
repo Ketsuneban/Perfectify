@@ -4,6 +4,10 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Automation.Text;
 using System.Windows.Controls;
+using System.Windows.Interop;
+using System.Windows.Threading;
+using System.IO;
+using System.Diagnostics;
 
 namespace NoteSync;
 
@@ -17,7 +21,12 @@ internal static class Program
             if (ListMap.Parse("1. A\n1. B\n1. C", "Auto")[2] != 3 ||
                 ListMap.Parse("1. A\n5. B", "Literal")[1] != 5 ||
                 ListMap.Parse("4. A\n9. B", "Markdown")[1] != 5 ||
-                ListMap.Parse("title\r\n1. A\r\n2. B", "Auto")[2] != 2)
+                ListMap.Parse("title\r\n1. A\r\n2. B", "Auto")[2] != 2 ||
+                ListMap.Parse("1. A\n\n1. B\n1.", "Auto")[3] != 3 ||
+                ListMap.Parse("1. A\n\n3. C", "Auto")[2] != 3 ||
+                ListMap.Parse("1.\n\n3. C", "Literal")[0] != 1 ||
+                ListMap.Parse("", "Auto")[0] != null ||
+                Native.FileName("A.txt - Notepad") != "A")
                 Environment.Exit(1);
             return;
         }
@@ -27,7 +36,7 @@ internal static class Program
 
 internal static class ListMap
 {
-    static readonly Regex Marker = new(@"^\s*(\d{1,9})[.)]\s+", RegexOptions.Compiled);
+    static readonly Regex Marker = new(@"^\s*(\d{1,9})[.)](?:\s+|$)", RegexOptions.Compiled);
     public static string[] Lines(string text) =>
         text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
     public static int LineOf(string text) => Lines(text).Length - 1;
@@ -39,17 +48,19 @@ internal static class ListMap
         {
             var m = Marker.Match(lines[i]);
             if (!m.Success) { i++; continue; }
-            var start = i;
+            var positions = new List<int>();
             var numbers = new List<int>();
-            while (i < lines.Length && (m = Marker.Match(lines[i])).Success)
+            while (i < lines.Length)
             {
-                numbers.Add(int.Parse(m.Groups[1].Value));
+                m = Marker.Match(lines[i]);
+                if (m.Success) { positions.Add(i); numbers.Add(int.Parse(m.Groups[1].Value)); }
+                else if (!string.IsNullOrWhiteSpace(lines[i])) break;
                 i++;
             }
             bool sequential = mode == "Markdown" ||
                 (mode == "Auto" && numbers.Count > 1 && numbers.Distinct().Count() < numbers.Count);
             for (int j = 0; j < numbers.Count; j++)
-                result[start + j] = sequential ? numbers[0] + j : numbers[j];
+                result[positions[j]] = sequential ? numbers[0] + j : numbers[j];
         }
         return result;
     }
@@ -57,7 +68,11 @@ internal static class ListMap
 
 internal sealed class MainWindow : Window
 {
-    readonly TextBox titleFilter = new() { Margin = new Thickness(0, 5, 0, 12) };
+    readonly TextBox titleFilter = new() { Margin = new Thickness(0, 5, 0, 8) };
+    readonly TextBox secondFilter = new() { Margin = new Thickness(0, 5, 0, 12) };
+    readonly FloatingToggle floating;
+    readonly DispatcherTimer floatTimer;
+    nint lastNote;
     readonly ComboBox mode = new() { Margin = new Thickness(0, 5, 0, 12), ItemsSource = new[] { "Auto", "Literal", "Markdown" }, SelectedIndex = 0 };
     readonly TextBlock status = new() { Text = "Остановлено", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0) };
     readonly Button toggle = new() { Content = "Запустить", Height = 36 };
@@ -66,12 +81,14 @@ internal sealed class MainWindow : Window
     public MainWindow()
     {
         Title = "NoteSync";
-        Width = 470; Height = 340; MinWidth = 430; MinHeight = 340;
+        Width = 470; Height = 435; MinWidth = 430; MinHeight = 435;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         var panel = new StackPanel { Margin = new Thickness(22) };
         panel.Children.Add(new TextBlock { Text = "Синхронизация двух заметок", FontSize = 21, FontWeight = FontWeights.SemiBold });
-        panel.Children.Add(new TextBlock { Text = "Точный заголовок обоих окон (пусто — авто)", Margin = new Thickness(0, 14, 0, 0) });
+        panel.Children.Add(new TextBlock { Text = "Имя первого файла (без расширения)", Margin = new Thickness(0, 14, 0, 0) });
         panel.Children.Add(titleFilter);
+        panel.Children.Add(new TextBlock { Text = "Имя второго файла (можно такое же)" });
+        panel.Children.Add(secondFilter);
         panel.Children.Add(new TextBlock { Text = "Нумерация: Auto / Literal / Markdown" });
         panel.Children.Add(mode);
         panel.Children.Add(scrollOnly);
@@ -79,7 +96,21 @@ internal sealed class MainWindow : Window
         panel.Children.Add(status);
         Content = panel;
         toggle.Click += (_, _) => Toggle();
-        Closed += (_, _) => session?.Cancel();
+        floating = new FloatingToggle(() => Toggle());
+        floatTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
+        floatTimer.Tick += (_, _) => RefreshFloating();
+        floatTimer.Start();
+        Closed += (_, _) => { floatTimer.Stop(); floating.Close(); session?.Cancel(); };
+    }
+    void RefreshFloating()
+    {
+        var active = Native.GetForegroundWindow();
+        if (Native.IsNotepad(active) && !Native.IsIconic(active)) lastNote = active;
+        else if (!Native.Own(active)) lastNote = 0;
+        if (lastNote == 0 || !Native.IsNotepad(lastNote) || Native.IsIconic(lastNote) ||
+            !Native.GetWindowRect(lastNote, out var bounds) || bounds.Right - bounds.Left < 280)
+        { floating.Hide(); return; }
+        floating.Update(session != null, bounds);
     }
     void Toggle()
     {
@@ -87,22 +118,29 @@ internal sealed class MainWindow : Window
         {
             session.Cancel(); session = null;
             toggle.Content = "Запустить"; status.Text = "Остановлено";
-            titleFilter.IsEnabled = mode.IsEnabled = scrollOnly.IsEnabled = true;
+            titleFilter.IsEnabled = secondFilter.IsEnabled = mode.IsEnabled = scrollOnly.IsEnabled = true;
+            return;
+        }
+        var filter = Native.InputName(titleFilter.Text);
+        var second = Native.InputName(secondFilter.Text);
+        if (filter.Length == 0 || second.Length == 0)
+        {
+            WindowState = WindowState.Normal; Show(); Activate();
+            status.Text = "Введи имена обоих файлов.";
             return;
         }
         var current = new CancellationTokenSource();
         session = current;
-        var filter = titleFilter.Text.Trim();
         var selectedMode = (string)mode.SelectedItem;
         bool onlyScroll = scrollOnly.IsChecked == true;
         toggle.Content = "Остановить";
-        titleFilter.IsEnabled = mode.IsEnabled = scrollOnly.IsEnabled = false;
-        status.Text = "Открой две заметки с одинаковым заголовком и поставь курсор в одну из них.";
+        titleFilter.IsEnabled = secondFilter.IsEnabled = mode.IsEnabled = scrollOnly.IsEnabled = false;
+        status.Text = "Открой указанные файлы в отдельных окнах Блокнота и поставь курсор в текст.";
         var thread = new Thread(() =>
         {
             try
             {
-                new Synchronizer(filter, selectedMode, onlyScroll, message =>
+                new Synchronizer(filter, second, selectedMode, onlyScroll, message =>
                 {
                     if (!current.IsCancellationRequested)
                         Dispatcher.BeginInvoke(new Action(() =>
@@ -111,7 +149,7 @@ internal sealed class MainWindow : Window
                         }));
                 }).Run(current.Token);
             }
-            finally { current.Dispose(); }
+            finally { /* Session owner may still signal cancellation. */ }
         }) { IsBackground = true };
         thread.SetApartmentState(ApartmentState.MTA);
         thread.Start();
@@ -119,7 +157,7 @@ internal sealed class MainWindow : Window
     }
 }
 
-internal sealed class Synchronizer(string filter, string mode, bool scrollOnly, Action<string> report)
+internal sealed class Synchronizer(string filter, string second, string mode, bool scrollOnly, Action<string> report)
 {
     readonly Dictionary<nint, AutomationElement> editors = new();
     (nint from, nint to, int line, int? number, string text)? last;
@@ -145,15 +183,18 @@ internal sealed class Synchronizer(string filter, string mode, bool scrollOnly, 
     void Tick(CancellationToken token)
     {
         var source = Native.GetForegroundWindow();
-        if (source == 0 || Native.Own(source)) return;
-        var title = Native.Title(source);
-        if (title.Length == 0 || (filter.Length > 0 && !string.Equals(title, filter, StringComparison.OrdinalIgnoreCase))) return;
-        var targets = Native.Windows().Where(w => w != source && !Native.Own(w) &&
-            string.Equals(Native.Title(w), title, StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (!Native.IsNotepad(source)) { last = null; return; }
+        var title = Native.FileName(Native.Title(source));
+        bool first = string.Equals(title, filter, StringComparison.OrdinalIgnoreCase);
+        bool other = string.Equals(title, second, StringComparison.OrdinalIgnoreCase);
+        if (!first && !other) { last = null; return; }
+        var wanted = first ? second : filter;
+        var targets = Native.Windows().Where(w => w != source && Native.IsNotepad(w) &&
+            string.Equals(Native.FileName(Native.Title(w)), wanted, StringComparison.OrdinalIgnoreCase)).ToArray();
         if (targets.Length != 1)
         {
             last = null;
-            Status(targets.Length == 0 ? "Второе окно с таким заголовком не найдено." : "Найдено больше двух окон; закрой лишние.");
+            Status(targets.Length == 0 ? "Второй файл не открыт в отдельном окне Блокнота." : "Найдено больше двух окон; закрой лишние.");
             return;
         }
         var target = targets[0];
@@ -179,7 +220,12 @@ internal sealed class Synchronizer(string filter, string mode, bool scrollOnly, 
         var numbers = ListMap.Parse(sourceText, mode);
         if (line >= numbers.Length) return;
         int? number = numbers[line];
-        if (number == null) number = ItemNumber(sourceEditor, src, caret);
+        if (number == null)
+        {
+            last = null;
+            Status("Пустая или ненумерованная строка — синхронизация пропущена.");
+            return;
+        }
         var destEditor = TargetEditor(target);
         if (destEditor == null || !TryText(destEditor, out var dst) || dst == null)
         {
@@ -201,7 +247,7 @@ internal sealed class Synchronizer(string filter, string mode, bool scrollOnly, 
                 if (match.Length == 1) range = match[0].range;
             }
         }
-        else range = FindLine(dst, destText, line);
+        
         if (range == null)
         {
             last = null; Status("Соответствующий пункт не найден однозначно."); return;
@@ -245,11 +291,7 @@ internal sealed class Synchronizer(string filter, string mode, bool scrollOnly, 
     }
     AutomationElement? TargetEditor(nint hwnd)
     {
-        if (editors.TryGetValue(hwnd, out var cached))
-        {
-            try { if (TryText(cached, out _)) return cached; } catch (ElementNotAvailableException) { }
-            editors.Remove(hwnd);
-        }
+        // Re-discover visible editor each tick: active Notepad tab may have changed.
         var root = AutomationElement.FromHandle(hwnd);
         var condition = new OrCondition(new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Document),
             new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Edit));
@@ -325,6 +367,34 @@ internal static class Native
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(nint hwnd, out uint pid);
     [DllImport("user32.dll")] public static extern nint GetForegroundWindow();
     [DllImport("user32.dll")] public static extern bool IsIconic(nint hwnd);
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Rect { public int Left, Top, Right, Bottom; }
+    [DllImport("user32.dll")] public static extern bool GetWindowRect(nint hwnd, out Rect rect);
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")] public static extern int GetWindowLong(nint hwnd, int index);
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongW")] public static extern int SetWindowLong(nint hwnd, int index, int value);
+    [DllImport("user32.dll")] public static extern bool SetWindowPos(nint hwnd, nint after, int x, int y, int cx, int cy, uint flags);
+    [DllImport("user32.dll")] public static extern uint GetDpiForWindow(nint hwnd);
+    public static bool IsNotepad(nint hwnd)
+    {
+        if (hwnd == 0) return false;
+        GetWindowThreadProcessId(hwnd, out uint pid);
+        try { using var p = Process.GetProcessById((int)pid); return p.ProcessName.Equals("notepad", StringComparison.OrdinalIgnoreCase); }
+        catch { return false; }
+    }
+    public static string InputName(string input)
+    {
+        var name = Path.GetFileName(input.Trim().Trim('"'));
+        // Only known text extensions; don't strip arbitrary dots in a note name.
+        if (name.EndsWith(".txt", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".md", StringComparison.OrdinalIgnoreCase) ||
+            name.EndsWith(".markdown", StringComparison.OrdinalIgnoreCase))
+            return Path.GetFileNameWithoutExtension(name);
+        return name;
+    }
+    public static string FileName(string title)
+    {
+        title = Regex.Replace(title, @"\s+[-–—]\s+(Notepad|Блокнот)\s*$", "", RegexOptions.IgnoreCase);
+        return InputName(title.Trim().Trim('*', '●', '•', ' '));
+    }
     public static bool Own(nint hwnd)
     {
         GetWindowThreadProcessId(hwnd, out uint pid);
@@ -341,5 +411,40 @@ internal static class Native
         var windows = new List<nint>();
         EnumWindows((hwnd, _) => { if (IsWindowVisible(hwnd)) windows.Add(hwnd); return true; }, 0);
         return windows;
+    }
+}
+
+internal sealed class FloatingToggle : Window
+{
+    readonly Button button;
+    public FloatingToggle(Action toggle)
+    {
+        Width = 144; Height = 32;
+        WindowStyle = WindowStyle.None; ResizeMode = ResizeMode.NoResize;
+        ShowInTaskbar = false; ShowActivated = false; Topmost = true;
+        button = new Button { Content = "Синхронизация: выкл.", FontSize = 11 };
+        Content = button;
+        button.Click += (_, _) => toggle();
+        SourceInitialized += (_, _) =>
+        {
+            var h = new WindowInteropHelper(this).Handle;
+            Native.SetWindowLong(h, -20, Native.GetWindowLong(h, -20) | 0x08000000 | 0x80);
+            ((HwndSource)PresentationSource.FromVisual(this)).AddHook((nint hwnd, int msg, nint w, nint l, ref bool handled) =>
+            {
+                if (msg == 0x0021) { handled = true; return (nint)3; } // MA_NOACTIVATE
+                return 0;
+            });
+        };
+    }
+    public void Update(bool enabled, Native.Rect bounds)
+    {
+        button.Content = enabled ? "Синхронизация: вкл." : "Синхронизация: выкл.";
+        if (!IsVisible) Show();
+        var h = new WindowInteropHelper(this).Handle;
+        double scale = Math.Max(96u, Native.GetDpiForWindow(h)) / 96.0;
+        int w = (int)(Width * scale), ht = (int)(Height * scale);
+        // Adjacent to Notepad title bar, below the caption buttons.
+        Native.SetWindowPos(h, (nint)(-1), bounds.Right - w - (int)(16 * scale),
+            bounds.Top + (int)(48 * scale), w, ht, 0x0010 | 0x0040);
     }
 }
