@@ -7,7 +7,10 @@ on:
       - '.github/workflows/notesync-win11.yml'
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
+concurrency:
+  group: notesync-win11-release
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: windows-latest
@@ -17,7 +20,7 @@ jobs:
         with:
           dotnet-version: '8.0.x'
       - name: Publish standalone executable
-        run: dotnet publish NoteSync/NoteSync.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o dist
+        run: dotnet publish NoteSync/NoteSync.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:Version=0.1.0 -o dist
       - name: Verify numbering parser
         shell: pwsh
         run: |
@@ -28,3 +31,17 @@ jobs:
           name: NoteSync-Windows-x64
           path: dist/NoteSync.exe
           if-no-files-found: error
+      - name: Publish NoteSync v0.1.0 prerelease
+        if: github.ref == 'refs/heads/notesync-win11'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = 'notesync-v0.1.0'
+          gh release view $tag --repo $env:GITHUB_REPOSITORY 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Release already exists; use a new version for future builds."
+            exit 0
+          }
+          gh release create $tag dist/NoteSync.exe --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "NoteSync 0.1.0 (Windows 11)" --notes "Experimental Windows x64 build for Notepad. Includes filename pairing, floating sync toggle, numbered lists and blank-line handling. Parser self-tests passed; real Notepad UI integration still requires manual verification." --prerelease --latest=false
+          if ($LASTEXITCODE -ne 0) { throw "Release publication failed" }
