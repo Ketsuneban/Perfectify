@@ -324,13 +324,13 @@ internal sealed class Synchronizer(string filter, string second, string mode, bo
         if (line >= lines.Length) { Interlocked.Exchange(ref sourceChanged, 1); return; }
         // A newly inserted blank paragraph directly after an ordered item is
         // the next Markdown item even before the provider exposes its marker.
-        if (oldText != null && sourceText != oldText && line > 0 && line == previousLine + 1 &&
+        if (oldText != null && sourceText != oldText && line > 0 && (line == previousLine + 1 || line == previousLine) &&
             lines.Length > ListMap.Lines(oldText).Length && string.IsNullOrWhiteSpace(lines[line]))
             pendingBlank = line;
         else if (line != pendingBlank || !string.IsNullOrWhiteSpace(lines[line])) pendingBlank = -1;
         previousLine = line;
         int? number = ListMap.Current(sourceText, line, mode, mode == "Markdown" || pendingBlank == line);
-        if (number == null && !string.IsNullOrWhiteSpace(lines[line]))
+        if (number == null && (!string.IsNullOrWhiteSpace(lines[line]) || pendingBlank == line || mode == "Markdown"))
             number = ItemNumber(sourceEditor, src, caret);
         if (number == null)
         {
@@ -346,6 +346,7 @@ internal sealed class Synchronizer(string filter, string second, string mode, bo
             Subscribe(destEditor, TextPattern.TextChangedEvent, onTargetText);
             destText = null;
         }
+        if (!dirtyTarget && destText != null && last is { } previous && previous.from == source && previous.to == target && previous.number == number.Value) return;
         if (!TryText(destEditor, out var dst) || dst == null) return;
         if (destText == null || dirtyTarget || last == null || last.Value.number != number.Value)
             destText = dst.DocumentRange.GetText(-1);
@@ -373,7 +374,12 @@ internal sealed class Synchronizer(string filter, string second, string mode, bo
         if (Native.GetForegroundWindow() != source)
         {
             last = null;
-            Status("Фокус изменился; синхронизация продолжится при следующем переходе.");
+            if (Native.GetForegroundWindow() == target)
+            {
+                Status("Блокнот изменил фокус; синхронизация приостановлена. Перезапусти или включи только прокрутку.");
+                token.WaitHandle.WaitOne();
+            }
+            else Status("Фокус изменился; синхронизация продолжится при следующем переходе.");
             return;
         }
         last = key;
@@ -487,7 +493,7 @@ internal sealed class Synchronizer(string filter, string second, string mode, bo
                 var r = pattern.RangeFromChild(item);
                 if (r != null)
                 {
-                    var match = Regex.Match(r.GetText(-1).TrimStart(), @"^(\d{1,9})[.)]\s");
+                    var match = Regex.Match(r.GetText(-1).TrimStart(), @"^(\d{1,9})[.)](?:\s|$)");
                     result.Add((match.Success ? int.Parse(match.Groups[1].Value) : i, r));
                 }
             }
@@ -501,7 +507,8 @@ internal sealed class Synchronizer(string filter, string second, string mode, bo
         foreach (var (number, range) in Items(editor, pattern))
         {
             if (range.CompareEndpoints(TextPatternRangeEndpoint.Start, caret, TextPatternRangeEndpoint.Start) <= 0 &&
-                range.CompareEndpoints(TextPatternRangeEndpoint.End, caret, TextPatternRangeEndpoint.Start) > 0)
+                (range.CompareEndpoints(TextPatternRangeEndpoint.End, caret, TextPatternRangeEndpoint.Start) > 0 ||
+                 range.CompareEndpoints(TextPatternRangeEndpoint.Start, caret, TextPatternRangeEndpoint.Start) == 0))
                 return number;
         }
         return null;
@@ -533,11 +540,20 @@ internal static class Native
     [DllImport("user32.dll", EntryPoint = "SetWindowLongW")] public static extern int SetWindowLong(nint hwnd, int index, int value);
     [DllImport("user32.dll")] public static extern bool SetWindowPos(nint hwnd, nint after, int x, int y, int cx, int cy, uint flags);
     [DllImport("user32.dll")] public static extern uint GetDpiForWindow(nint hwnd);
+    static readonly System.Collections.Concurrent.ConcurrentDictionary<uint, (bool isNotepad, long expires)> processTypes = new();
     public static bool IsNotepad(nint hwnd)
     {
         if (hwnd == 0) return false;
         GetWindowThreadProcessId(hwnd, out uint pid);
-        try { using var p = Process.GetProcessById((int)pid); return p.ProcessName.Equals("notepad", StringComparison.OrdinalIgnoreCase); }
+        long now = Environment.TickCount64;
+        if (processTypes.TryGetValue(pid, out var cached) && cached.expires > now) return cached.isNotepad;
+        try
+        {
+            using var p = Process.GetProcessById((int)pid);
+            bool result = p.ProcessName.Equals("notepad", StringComparison.OrdinalIgnoreCase);
+            processTypes[pid] = (result, now + 3000);
+            return result;
+        }
         catch { return false; }
     }
     public static string InputName(string input)
