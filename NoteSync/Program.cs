@@ -26,7 +26,12 @@ internal static class Program
                 ListMap.Parse("1. A\n\n3. C", "Auto")[2] != 3 ||
                 ListMap.Parse("1.\n\n3. C", "Literal")[0] != 1 ||
                 ListMap.Parse("", "Auto")[0] != null ||
-                Native.FileName("A.txt - Notepad") != "A")
+                Native.FileName("A.txt - Notepad") != "A" ||
+                ListMap.Current("1. A\n2. B\n", 2, "Markdown", true) != 3 ||
+                ListMap.Current("1. A\n1. B\n", 2, "Auto", true) != 3 ||
+                ListMap.Current("1. A\n\n3. C", 1, "Literal", true) != null ||
+                ListMap.Current("1. A\n\n\n", 2, "Markdown", true) != null ||
+                ListMap.Current("1. A\n2.", 1, "Auto", true) != 2)
                 Environment.Exit(1);
             return;
         }
@@ -40,6 +45,16 @@ internal static class ListMap
     public static string[] Lines(string text) =>
         text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
     public static int LineOf(string text) => Lines(text).Length - 1;
+    public static int? Current(string text, int line, string mode, bool allowNewBlank)
+    {
+        var lines = Lines(text);
+        var map = Parse(text, mode);
+        if (line < 0 || line >= map.Length) return null;
+        if (map[line].HasValue) return map[line];
+        if (allowNewBlank && mode != "Literal" && line > 0 && string.IsNullOrWhiteSpace(lines[line]) && map[line - 1] is int previous)
+            return previous + 1;
+        return null;
+    }
     public static int?[] Parse(string text, string mode)
     {
         var lines = Lines(text);
@@ -97,7 +112,7 @@ internal sealed class MainWindow : Window
         Content = panel;
         toggle.Click += (_, _) => Toggle();
         floating = new FloatingToggle(() => Toggle());
-        floatTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
+        floatTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
         floatTimer.Tick += (_, _) => RefreshFloating();
         floatTimer.Start();
         Closed += (_, _) => { floatTimer.Stop(); floating.Close(); session?.Cancel(); };
@@ -159,7 +174,17 @@ internal sealed class MainWindow : Window
 
 internal sealed class Synchronizer(string filter, string second, string mode, bool scrollOnly, Action<string> report)
 {
-    (nint from, nint to, int line, int? number, string text)? last;
+    (nint from, nint to, int number, string text)? last;
+    nint activeSource, activeTarget;
+    string activeTitle = "", targetTitle = "";
+    AutomationElement? sourceEditor, destEditor;
+    string? sourceText, destText;
+    int sourceChanged = 1, targetChanged = 1, selectionChanged = 1;
+    long nextDiscovery, nextFallback, nextCheck;
+    uint lastInput;
+    int previousLine = -1;
+    int pendingBlank = -1;
+    AutomationEventHandler? onSelection, onSourceText, onTargetText;
     string previousMessage = "";
     void Status(string message)
     {
@@ -168,108 +193,234 @@ internal sealed class Synchronizer(string filter, string second, string mode, bo
     }
     public void Run(CancellationToken token)
     {
-        while (!token.IsCancellationRequested)
+        try
         {
-            try { Tick(token); }
-            catch (Exception e) when (e is not OutOfMemoryException)
+            while (!token.IsCancellationRequested)
             {
-                last = null;
-                Status("UI Automation: " + e.Message);
+                try { Tick(token); }
+                catch (Exception e) when (e is not OutOfMemoryException)
+                {
+                    Reset();
+                    nextDiscovery = Environment.TickCount64 + 1000;
+                    Status("UI Automation: " + e.Message);
+                }
+                token.WaitHandle.WaitOne(120);
             }
-            token.WaitHandle.WaitOne(180);
         }
+        finally { Reset(); }
+    }
+    void Reset()
+    {
+        Remove(sourceEditor, TextPattern.TextSelectionChangedEvent, onSelection);
+        Remove(sourceEditor, TextPattern.TextChangedEvent, onSourceText);
+        Remove(destEditor, TextPattern.TextChangedEvent, onTargetText);
+        sourceEditor = destEditor = null;
+        onSelection = onSourceText = onTargetText = null;
+        activeSource = activeTarget = 0;
+        activeTitle = targetTitle = "";
+        sourceText = destText = null;
+        last = null; previousLine = pendingBlank = -1;
+        Interlocked.Exchange(ref sourceChanged, 1);
+        Interlocked.Exchange(ref targetChanged, 1);
+        Interlocked.Exchange(ref selectionChanged, 1);
+    }
+    static void Remove(AutomationElement? element, AutomationEvent evt, AutomationEventHandler? handler)
+    {
+        if (element == null || handler == null) return;
+        try { Automation.RemoveAutomationEventHandler(evt, element, handler); } catch { }
+    }
+    static void Subscribe(AutomationElement element, AutomationEvent evt, AutomationEventHandler handler)
+    {
+        try { Automation.AddAutomationEventHandler(evt, element, TreeScope.Element, handler); }
+        catch { /* Input-triggered fallback for providers that do not raise events. */ }
     }
     void Tick(CancellationToken token)
     {
+        long now = Environment.TickCount64;
         var source = Native.GetForegroundWindow();
-        if (!Native.IsNotepad(source)) { last = null; return; }
+        if (source != activeSource && !Native.IsNotepad(source))
+        {
+            if (activeSource != 0) Reset();
+            return;
+        }
         var title = Native.FileName(Native.Title(source));
         bool first = string.Equals(title, filter, StringComparison.OrdinalIgnoreCase);
         bool other = string.Equals(title, second, StringComparison.OrdinalIgnoreCase);
-        if (!first && !other) { last = null; return; }
+        if (!first && !other) { if (activeSource != 0) Reset(); return; }
         var wanted = first ? second : filter;
-        var targets = Native.Windows().Where(w => w != source && Native.IsNotepad(w) &&
-            string.Equals(Native.FileName(Native.Title(w)), wanted, StringComparison.OrdinalIgnoreCase)).ToArray();
-        if (targets.Length != 1)
+        bool changedWindow = source != activeSource || title != activeTitle;
+        if (changedWindow && activeSource != 0) { Reset(); nextDiscovery = 0; }
+        if (activeTarget != 0 && (!Native.IsWindow(activeTarget) ||
+            !string.Equals(Native.FileName(Native.Title(activeTarget)), wanted, StringComparison.OrdinalIgnoreCase)))
+        { Reset(); nextDiscovery = 0; }
+        if (now >= nextDiscovery)
         {
-            last = null;
-            Status(targets.Length == 0 ? "Второй файл не открыт в отдельном окне Блокнота." : "Найдено больше двух окон; закрой лишние.");
-            return;
+            nextDiscovery = now + 1800;
+            var targets = Native.Windows().Where(w => w != source &&
+                string.Equals(Native.FileName(Native.Title(w)), wanted, StringComparison.OrdinalIgnoreCase) &&
+                Native.IsNotepad(w)).ToArray();
+            if (targets.Length != 1)
+            {
+                if (activeSource != 0) Reset();
+                Status(targets.Length == 0 ? "Второй файл не открыт." : "Найдено несколько подходящих окон.");
+                return;
+            }
+            if (activeTarget != 0 && activeTarget != targets[0]) Reset();
+            activeSource = source; activeTarget = targets[0]; activeTitle = title;
+            targetTitle = Native.Title(activeTarget);
         }
-        var target = targets[0];
-        if (Native.IsIconic(target)) { Status("Разверни вторую заметку."); last = null; return; }
-        var root = AutomationElement.FromHandle(source);
-        var focus = AutomationElement.FocusedElement;
-        var sourceEditor = FindFocused(focus, root);
-        if (sourceEditor == null)
+        if (activeSource != source || activeTarget == 0 || Native.IsIconic(activeTarget)) return;
+        var target = activeTarget;
+        var currentTargetTitle = Native.Title(target);
+        if (currentTargetTitle != targetTitle)
         {
-            Status("Поставь курсор в текст заметки (нужен UIA TextPattern)."); last = null; return;
+            targetTitle = currentTargetTitle;
+            Interlocked.Exchange(ref targetChanged, 1);
         }
-        if (!TryText(sourceEditor, out var src) || src == null) return;
+        uint input = Native.LastInput();
+        bool fallback = input != lastInput && now >= nextFallback;
+        bool dirtySource = Interlocked.Exchange(ref sourceChanged, 0) != 0;
+        bool dirtyTarget = Interlocked.Exchange(ref targetChanged, 0) != 0;
+        bool dirtySelection = Interlocked.Exchange(ref selectionChanged, 0) != 0;
+        if (fallback) { lastInput = input; nextFallback = now + 650; }
+        if (!fallback && !dirtySource && !dirtyTarget && !dirtySelection && now < nextCheck) return;
+        // No periodic UIA document reads while idle. The health check only
+        // retries discovery if a provider was unavailable.
+        if (sourceEditor != null && destEditor != null && !fallback &&
+            !dirtySource && !dirtyTarget && !dirtySelection) return;
+        nextCheck = now + 1200;
+        if (sourceEditor == null || fallback)
+        {
+            var root = AutomationElement.FromHandle(source);
+            var focused = FindFocused(AutomationElement.FocusedElement, root);
+            if (focused == null)
+            {
+                Status("Поставь курсор в текст заметки.");
+                return;
+            }
+            if (sourceEditor == null || !sourceEditor.Equals(focused))
+            {
+                Remove(sourceEditor, TextPattern.TextSelectionChangedEvent, onSelection);
+                Remove(sourceEditor, TextPattern.TextChangedEvent, onSourceText);
+                sourceEditor = focused; sourceText = null; pendingBlank = previousLine = -1; last = null;
+                onSelection = (_, _) => Interlocked.Exchange(ref selectionChanged, 1);
+                onSourceText = (_, _) => { Interlocked.Exchange(ref sourceChanged, 1); Interlocked.Exchange(ref selectionChanged, 1); };
+                Subscribe(sourceEditor, TextPattern.TextSelectionChangedEvent, onSelection);
+                Subscribe(sourceEditor, TextPattern.TextChangedEvent, onSourceText);
+            }
+        }
+        if (sourceEditor == null || !TryText(sourceEditor, out var src) || src == null) return;
         var selections = src.GetSelection();
-        if (selections.Length != 1) { last = null; Status("Редактор не отдаёт одиночную позицию курсора."); return; }
+        if (selections.Length != 1) return;
         var caret = selections[0].Clone();
         caret.MoveEndpointByRange(TextPatternRangeEndpoint.End, caret, TextPatternRangeEndpoint.Start);
         var prefix = src.DocumentRange.Clone();
         prefix.MoveEndpointByRange(TextPatternRangeEndpoint.End, caret, TextPatternRangeEndpoint.Start);
         string before = prefix.GetText(-1);
-        string sourceText = src.DocumentRange.GetText(-1);
         int line = ListMap.LineOf(before);
-        var numbers = ListMap.Parse(sourceText, mode);
-        if (line >= numbers.Length) return;
-        int? number = numbers[line];
-        if (number == null && !string.IsNullOrWhiteSpace(ListMap.Lines(sourceText)[line]))
+        string? oldText = sourceText;
+        if (sourceText == null || dirtySource || fallback) sourceText = src.DocumentRange.GetText(-1);
+        var lines = ListMap.Lines(sourceText);
+        if (line >= lines.Length) { Interlocked.Exchange(ref sourceChanged, 1); return; }
+        // A newly inserted blank paragraph directly after an ordered item is
+        // the next Markdown item even before the provider exposes its marker.
+        if (oldText != null && sourceText != oldText && line > 0 && line == previousLine + 1 &&
+            lines.Length > ListMap.Lines(oldText).Length && string.IsNullOrWhiteSpace(lines[line]))
+            pendingBlank = line;
+        else if (line != pendingBlank || !string.IsNullOrWhiteSpace(lines[line])) pendingBlank = -1;
+        previousLine = line;
+        int? number = ListMap.Current(sourceText, line, mode, mode == "Markdown" || pendingBlank == line);
+        if (number == null && !string.IsNullOrWhiteSpace(lines[line]))
             number = ItemNumber(sourceEditor, src, caret);
         if (number == null)
         {
             last = null;
-            Status("Пустая или ненумерованная строка — синхронизация пропущена.");
+            Status("Пустая или ненумерованная строка.");
             return;
         }
-        var destEditor = TargetEditor(target);
-        if (destEditor == null || !TryText(destEditor, out var dst) || dst == null)
+        if (destEditor == null)
         {
-            last = null; Status("Во втором окне нет доступного текстового редактора."); return;
+            destEditor = TargetEditor(target);
+            if (destEditor == null) { Status("Во втором окне нет доступного редактора."); return; }
+            onTargetText = (_, _) => Interlocked.Exchange(ref targetChanged, 1);
+            Subscribe(destEditor, TextPattern.TextChangedEvent, onTargetText);
+            destText = null;
         }
-        string destText = dst.DocumentRange.GetText(-1);
-        var key = (source, target, line, number, destText);
+        if (!TryText(destEditor, out var dst) || dst == null) return;
+        if (destText == null || dirtyTarget || last == null || last.Value.number != number.Value)
+            destText = dst.DocumentRange.GetText(-1);
+        var key = (source, target, number.Value, destText);
         if (last == key) return;
         TextPatternRange? range = null;
-        if (number.HasValue)
+        var matches = ListMap.Parse(destText, mode).Select((n, i) => (n, i))
+            .Where(x => x.n == number).ToArray();
+        if (matches.Length == 1) range = FindLine(dst, destText, matches[0].i);
+        else if (matches.Length == 0)
         {
-            var matches = ListMap.Parse(destText, mode).Select((n, i) => (n, i))
-                .Where(x => x.n == number).ToArray();
-            if (matches.Length == 1) range = FindLine(dst, destText, matches[0].i);
-            else if (matches.Length == 0)
-            {
-                var items = Items(destEditor, dst);
-                var match = items.Where(x => x.number == number).ToArray();
-                if (match.Length == 1) range = match[0].range;
-            }
+            var match = Items(destEditor, dst).Where(x => x.number == number).ToArray();
+            if (match.Length == 1) range = match[0].range;
         }
-        
         if (range == null)
         {
-            last = null; Status("Соответствующий пункт не найден однозначно."); return;
+            last = key;
+            Status("Соответствующий пункт не найден однозначно.");
+            return;
         }
         if (token.IsCancellationRequested || Native.GetForegroundWindow() != source) return;
-        // Never activate either window or simulate keyboard input.
-        range.ScrollIntoView(false);
-        if (!scrollOnly && dst.SupportedTextSelection != SupportedTextSelection.None)
-        {
-            if (Native.GetForegroundWindow() != source) { Status("Редактор или пользователь изменил фокус при прокрутке; перезапусти синхронизацию."); token.WaitHandle.WaitOne(); return; }
-            range.Select();
-        }
+        if (!scrollOnly && dst.SupportedTextSelection != SupportedTextSelection.None) range.Select();
+        if (Native.GetForegroundWindow() == source)
+            CenterRange(destEditor, dst, range, token, source);
         if (Native.GetForegroundWindow() != source)
         {
-            Status("Редактор изменил фокус; синхронизация этой пары приостановлена. Используй режим только прокрутки.");
-            // Stop this session rather than repeatedly stealing focus.
-            token.WaitHandle.WaitOne();
+            last = null;
+            Status("Фокус изменился; синхронизация продолжится при следующем переходе.");
             return;
         }
         last = key;
-        Status((number.HasValue ? $"Пункт {number}" : $"Строка {line + 1}") +
-            (scrollOnly || dst.SupportedTextSelection == SupportedTextSelection.None ? " — прокручено" : " — выделено"));
+        Status($"Пункт {number} — синхронизирован");
+    }
+    static void CenterRange(AutomationElement editor, TextPattern pattern, TextPatternRange range, CancellationToken token, nint source)
+    {
+        range.ScrollIntoView(true);
+        if (token.IsCancellationRequested || Native.GetForegroundWindow() != source) return;
+        var viewport = editor.Current.BoundingRectangle;
+        if (viewport.IsEmpty || viewport.Height <= 0) return;
+        ScrollPattern? scroll = null;
+        AutomationElement? parent = editor;
+        for (int i = 0; i < 6 && parent != null; i++)
+        {
+            if (parent.TryGetCurrentPattern(ScrollPattern.Pattern, out var obj) && obj is ScrollPattern candidate &&
+                candidate.Current.VerticallyScrollable)
+            { scroll = candidate; break; }
+            parent = TreeWalker.RawViewWalker.GetParent(parent);
+        }
+        if (scroll != null)
+        {
+            for (int i = 0; i < 2; i++)
+            {
+                if (token.IsCancellationRequested || Native.GetForegroundWindow() != source) return;
+                var rects = range.GetBoundingRectangles();
+                if (rects.Length == 0) break;
+                double delta = rects[0].Top + rects[0].Height / 2 - (viewport.Top + viewport.Height / 2);
+                if (Math.Abs(delta) < 14) return;
+                double view = scroll.Current.VerticalViewSize;
+                double old = scroll.Current.VerticalScrollPercent;
+                if (view <= 0 || view >= 100 || old < 0) break;
+                double next = Math.Clamp(old + delta / viewport.Height * view / (100 - view) * 100, 0, 100);
+                if (Math.Abs(next - old) < 0.05) return;
+                scroll.SetScrollPercent(ScrollPattern.NoScroll, next);
+            }
+            return;
+        }
+        // TextPattern-only fallback: align a point half a viewport before
+        // the selected visual line with the top of the editor.
+        var bounds = range.GetBoundingRectangles();
+        if (bounds.Length == 0 || bounds[0].Height <= 0) return;
+        int half = Math.Clamp((int)(viewport.Height / bounds[0].Height / 2), 1, 100);
+        var anchor = range.Clone();
+        anchor.MoveEndpointByRange(TextPatternRangeEndpoint.End, anchor, TextPatternRangeEndpoint.Start);
+        anchor.Move(TextUnit.Line, -half);
+        if (!token.IsCancellationRequested && Native.GetForegroundWindow() == source) anchor.ScrollIntoView(true);
     }
     static bool TryText(AutomationElement element, out TextPattern? text)
     {
@@ -362,6 +513,15 @@ internal static class Native
     delegate bool EnumProc(nint hwnd, nint param);
     [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc callback, nint param);
     [DllImport("user32.dll")] static extern bool IsWindowVisible(nint hwnd);
+    [DllImport("user32.dll")] public static extern bool IsWindow(nint hwnd);
+    [StructLayout(LayoutKind.Sequential)]
+    struct LastInputInfo { public uint Size, Time; }
+    [DllImport("user32.dll")] static extern bool GetLastInputInfo(ref LastInputInfo info);
+    public static uint LastInput()
+    {
+        var info = new LastInputInfo { Size = (uint)Marshal.SizeOf<LastInputInfo>() };
+        return GetLastInputInfo(ref info) ? info.Time : 0;
+    }
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(nint hwnd, System.Text.StringBuilder text, int max);
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(nint hwnd, out uint pid);
     [DllImport("user32.dll")] public static extern nint GetForegroundWindow();
@@ -416,6 +576,8 @@ internal static class Native
 internal sealed class FloatingToggle : Window
 {
     readonly Button button;
+    Native.Rect previousBounds;
+    bool previousEnabled;
     public FloatingToggle(Action toggle)
     {
         Width = 144; Height = 32;
@@ -437,6 +599,8 @@ internal sealed class FloatingToggle : Window
     }
     public void Update(bool enabled, Native.Rect bounds)
     {
+        if (IsVisible && previousBounds.Equals(bounds) && previousEnabled == enabled) return;
+        previousBounds = bounds; previousEnabled = enabled;
         button.Content = enabled ? "Синхронизация: вкл." : "Синхронизация: выкл.";
         if (!IsVisible) Show();
         var h = new WindowInteropHelper(this).Handle;
