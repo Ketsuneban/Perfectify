@@ -211,7 +211,7 @@ internal sealed class Synchronizer(string filter, string mode, bool scrollOnly, 
         range.ScrollIntoView(false);
         if (!scrollOnly && dst.SupportedTextSelection != SupportedTextSelection.None)
         {
-            if (Native.GetForegroundWindow() != source) { Status("Редактор перехватил фокус при прокрутке; останови синхронизацию."); return; }
+            if (Native.GetForegroundWindow() != source) { Status("Редактор или пользователь изменил фокус при прокрутке; перезапусти синхронизацию."); token.WaitHandle.WaitOne(); return; }
             range.Select();
         }
         if (Native.GetForegroundWindow() != source)
