@@ -106,7 +106,7 @@ internal sealed class MainWindow : Window
     {
         var active = Native.GetForegroundWindow();
         if (Native.IsNotepad(active) && !Native.IsIconic(active)) lastNote = active;
-        else if (!Native.Own(active)) lastNote = 0;
+        else lastNote = 0;
         if (lastNote == 0 || !Native.IsNotepad(lastNote) || Native.IsIconic(lastNote) ||
             !Native.GetWindowRect(lastNote, out var bounds) || bounds.Right - bounds.Left < 280)
         { floating.Hide(); return; }
@@ -149,7 +149,7 @@ internal sealed class MainWindow : Window
                         }));
                 }).Run(current.Token);
             }
-            finally { /* Session owner may still signal cancellation. */ }
+            finally { Dispatcher.BeginInvoke(new Action(() => current.Dispose())); }
         }) { IsBackground = true };
         thread.SetApartmentState(ApartmentState.MTA);
         thread.Start();
@@ -159,7 +159,6 @@ internal sealed class MainWindow : Window
 
 internal sealed class Synchronizer(string filter, string second, string mode, bool scrollOnly, Action<string> report)
 {
-    readonly Dictionary<nint, AutomationElement> editors = new();
     (nint from, nint to, int line, int? number, string text)? last;
     string previousMessage = "";
     void Status(string message)
@@ -174,7 +173,7 @@ internal sealed class Synchronizer(string filter, string second, string mode, bo
             try { Tick(token); }
             catch (Exception e) when (e is not OutOfMemoryException)
             {
-                last = null; editors.Clear();
+                last = null;
                 Status("UI Automation: " + e.Message);
             }
             token.WaitHandle.WaitOne(180);
@@ -206,7 +205,6 @@ internal sealed class Synchronizer(string filter, string second, string mode, bo
         {
             Status("Поставь курсор в текст заметки (нужен UIA TextPattern)."); last = null; return;
         }
-        editors[source] = sourceEditor;
         if (!TryText(sourceEditor, out var src) || src == null) return;
         var selections = src.GetSelection();
         if (selections.Length != 1) { last = null; Status("Редактор не отдаёт одиночную позицию курсора."); return; }
@@ -220,6 +218,8 @@ internal sealed class Synchronizer(string filter, string second, string mode, bo
         var numbers = ListMap.Parse(sourceText, mode);
         if (line >= numbers.Length) return;
         int? number = numbers[line];
+        if (number == null && !string.IsNullOrWhiteSpace(ListMap.Lines(sourceText)[line]))
+            number = ItemNumber(sourceEditor, src, caret);
         if (number == null)
         {
             last = null;
@@ -299,7 +299,6 @@ internal sealed class Synchronizer(string filter, string second, string mode, bo
             .Where(e => !e.Current.IsOffscreen && TryText(e, out _))
             .OrderByDescending(e => e.Current.BoundingRectangle.Width * e.Current.BoundingRectangle.Height).ToArray();
         var found = candidates.FirstOrDefault();
-        if (found != null) editors[hwnd] = found;
         return found;
     }
     static TextPatternRange? FindLine(TextPattern pattern, string doc, int line)
